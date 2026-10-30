@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_dairy/core/services/whatsapp_service.dart';
+import 'package:smart_dairy/core/utils/currency_formatter.dart';
 import 'package:smart_dairy/features/billing/models/monthly_bill_model.dart';
 import 'package:smart_dairy/features/customers/models/customer_model.dart';
 
@@ -56,7 +57,7 @@ void main() {
       expect(message, contains('मासिक दूध बिल'));
       expect(message, contains('Rahul Patil'));
       expect(message, contains('30.0 लिटर'));
-      expect(message, contains('₹1,800'));
+      expect(message, contains(CurrencyFormatter.format(1800.0)));
       expect(message, contains('owner@oksbi'));
     });
 
@@ -71,10 +72,9 @@ void main() {
       expect(message, contains('Smart Dairy - Monthly Milk Statement'));
       expect(message, contains('Rahul Patil'));
       expect(message, contains('30.0 Litres'));
-      expect(message, contains('₹1,800'));
+      expect(message, contains(CurrencyFormatter.format(1800.0)));
       expect(message, contains('owner@oksbi'));
       expect(message, contains('Thank you for choosing Smart Dairy!'));
     });
   });
 }
-
