@@ -32,13 +32,30 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Prepare Gradle Wrapper
+        run: |
+          cd android
+          gradle wrapper --gradle-version 8.4 || true
+          chmod +x gradlew || true
+          cd ..
+
       - name: Get Dependencies
         run: flutter pub get
 
       - name: Build Release APK
-        run: flutter build apk --release --no-tree-shake-icons
+        run: |
+          flutter build apk --release --no-tree-shake-icons --verbose > build.log 2>&1 || (tail -n 120 build.log && exit 1)
+
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          retention-days: 7
 
       - name: Upload APK Artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: SmartDairy-Release-APK
@@ -47,12 +64,12 @@ jobs:
 
       - name: Create GitHub Release with APK
         uses: softprops/action-gh-release@v2
-        if: github.ref == 'refs/heads/main'
+        if: success() && github.ref == 'refs/heads/main'
         continue-on-error: true
         with:
           tag_name: v1.0.0
           name: "Smart Dairy v1.0.0 - Android APK"
-          body: "Direct download link for Smart Dairy Android APK"
+          body: "Official Release APK for Smart Dairy Application"
           files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
