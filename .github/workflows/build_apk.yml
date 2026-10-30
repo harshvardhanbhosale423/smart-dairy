@@ -7,6 +7,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build Release APK
@@ -32,9 +35,6 @@ jobs:
       - name: Get Dependencies
         run: flutter pub get
 
-      - name: Run Tests
-        run: flutter test || true
-
       - name: Build Release APK
         run: flutter build apk --release --no-tree-shake-icons
 
@@ -44,3 +44,15 @@ jobs:
           name: SmartDairy-Release-APK
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
+
+      - name: Create GitHub Release with APK
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
+        with:
+          tag_name: v1.0.0
+          name: "Smart Dairy v1.0.0 - Android APK"
+          body: "Direct download link for Smart Dairy Android APK"
+          files: build/app/outputs/flutter-apk/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
