@@ -35,7 +35,7 @@
     <application
         android:label="Smart Dairy"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@drawable/ic_launcher">
         
         <activity
             android:name=".MainActivity"
