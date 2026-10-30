@@ -1,0 +1,15 @@
+{
+  "name": "smart-dairy-functions",
+  "description": "Firebase Cloud Functions for Smart Dairy Payment Webhooks, Ledger Reconciliation, and Notifications",
+  "version": "1.0.0",
+  "engines": {
+    "node": "18"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^5.0.0"
+  },
+  "private": true
+}
+

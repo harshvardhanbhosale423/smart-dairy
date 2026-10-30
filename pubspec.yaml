@@ -1,0 +1,55 @@
+name: smart_dairy
+description: Smart Dairy - Milk & Account Management System for cow dairy owners and customers.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # State Management & Architecture
+  provider: ^6.1.2
+
+  # Firebase Suite
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.1
+  cloud_firestore: ^5.4.4
+  firebase_messaging: ^15.1.3
+  firebase_storage: ^12.3.2
+  firebase_app_check: ^0.3.1+4
+
+  # UI, Icons, Typography & Charts
+  google_fonts: ^6.2.1
+  fl_chart: ^0.69.0
+  qr_flutter: ^4.1.0
+  flutter_svg: ^2.0.10+1
+
+  # Utilities, Date, Currency & Storage
+  intl: ^0.19.0
+  uuid: ^4.5.1
+  shared_preferences: ^2.3.2
+  path_provider: ^2.1.4
+
+  # Document Generation & Sharing
+  pdf: ^3.11.1
+  printing: ^5.13.2
+  url_launcher: ^6.3.0
+  share_plus: ^10.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icons/
+    - assets/illustrations/
+    - assets/logo/
+
