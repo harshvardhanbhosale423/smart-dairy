@@ -4,30 +4,26 @@ echo =======================================================
 echo          Smart Dairy - GitHub Push Helper
 echo =======================================================
 echo.
-echo When uploading via web browser drag-and-drop, GitHub limits
-echo you to 100 files at a time. This script bypasses that limit
-echo and uploads all project files automatically in one go!
+echo Target Repository:
+echo https://github.com/harshvardhanbhosale423/smart-dairy.git
 echo.
 echo -------------------------------------------------------
-echo 1. Go to your empty repository on github.com
-echo 2. Copy the HTTPS link (e.g. https://github.com/YourName/smart-dairy.git)
+echo NOTE: Make sure you clicked "Create repository" once at:
+echo https://github.com/new?name=smart-dairy
 echo -------------------------------------------------------
 echo.
 
-set /p REPO_URL="Paste your GitHub repository URL here: "
+set DEFAULT_URL=https://github.com/harshvardhanbhosale423/smart-dairy.git
+set /p REPO_URL="Press ENTER to push to %DEFAULT_URL% (or paste new URL): "
 
-if "%REPO_URL%"=="" (
-    echo [ERROR] No URL provided. Exiting.
-    pause
-    exit /b 1
-)
+if "%REPO_URL%"=="" set REPO_URL=%DEFAULT_URL%
 
 echo.
 echo [1/3] Setting remote repository...
 git remote remove origin 2>nul
 git remote add origin %REPO_URL%
 
-echo [2/3] Preparing branch...
+echo [2/3] Preparing branch 'main'...
 git branch -M main
 
 echo [3/3] Uploading all project files to GitHub...
@@ -39,16 +35,16 @@ if %ERRORLEVEL% EQU 0 (
     echo [SUCCESS] All files uploaded to GitHub successfully!
     echo =======================================================
     echo.
-    echo NOW GET YOUR APK:
-    echo 1. Open your repository on github.com
-    echo 2. Click the "Actions" tab at the top.
-    echo 3. Click "Build Release APK" and wait ~2 minutes.
-    echo 4. Click "SmartDairy-Release-APK" to download your APK!
+    echo DIRECT APK DOWNLOAD LINK:
+    echo Open: https://github.com/harshvardhanbhosale423/smart-dairy/actions
+    echo.
+    echo Click "Build Release APK" -^> Download "SmartDairy-Release-APK"
     echo.
 ) else (
     echo.
-    echo [ERROR] Push failed. If prompted for GitHub login in your browser,
-    echo please approve it to complete the upload.
+    echo [NOTE] If you saw "repository not found", please open:
+    echo https://github.com/new?name=smart-dairy
+    echo and click the green "Create repository" button first!
 )
 
 pause
