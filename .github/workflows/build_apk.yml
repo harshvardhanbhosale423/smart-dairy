@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -32,27 +34,30 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Prepare Gradle Wrapper
-        run: |
-          cd android
-          gradle wrapper --gradle-version 8.4 || true
-          chmod +x gradlew || true
-          cd ..
-
       - name: Get Dependencies
         run: flutter pub get
 
       - name: Build Release APK
         run: |
-          flutter build apk --release --no-tree-shake-icons --verbose > build.log 2>&1 || (tail -n 120 build.log && exit 1)
+          set +e
+          flutter build apk --release --no-tree-shake-icons --verbose > build.log 2>&1
+          STATUS=$?
+          if [ $STATUS -ne 0 ]; then
+            echo "::error::Flutter build failed with code $STATUS"
+            tail -n 150 build.log
+            exit $STATUS
+          fi
 
-      - name: Upload Build Log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
-          retention-days: 7
+      - name: Push Build Log on Failure
+        if: failure()
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git checkout -B build-logs
+          tail -n 350 build.log > build_error.txt
+          git add build_error.txt
+          git commit -m "Capture build failure log" || true
+          git push origin build-logs --force || true
 
       - name: Upload APK Artifact
         if: success()
