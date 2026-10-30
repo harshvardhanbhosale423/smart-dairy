@@ -41,12 +41,13 @@ jobs:
           flutter build apk --release --no-tree-shake-icons --verbose > build.log 2>&1
           STATUS=$?
           if [ $STATUS -ne 0 ]; then
-            echo "==================== BUILD FAILURE TAIL ===================="
-            tail -n 120 build.log
-            echo "============================================================"
-            PASTE_URL=$(curl -s -F "file=@build.log" https://0x0.st || true)
-            echo "::notice::Full Log URL: $PASTE_URL"
-            echo "::error::Build failed with exit code $STATUS"
+            echo "::error::--- BUILD FAILURE LOG START ---"
+            grep -E "FAILURE|Error:|exception|Execution failed" build.log -B 2 -A 5 | tail -n 40 | while IFS= read -r line; do
+              echo "::error::${line}"
+            done
+            tail -n 30 build.log | while IFS= read -r line; do
+              echo "::warning::${line}"
+            done
             exit $STATUS
           fi
 
