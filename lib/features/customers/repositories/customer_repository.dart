@@ -141,4 +141,9 @@ class CustomerRepository {
           'updatedAt': FieldValue.serverTimestamp(),
         });
   }
+
+  /// Delete customer
+  Future<void> deleteCustomer(String customerId, [String? ownerId]) async {
+    await _firestore.collection('customers').doc(customerId).delete();
+  }
 }

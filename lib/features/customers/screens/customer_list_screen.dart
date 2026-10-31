@@ -324,7 +324,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                   ? Center(
                       child: EmptyStateWidget(
                         title: context.tr('no_data'),
-                        subtitle: 'नवीन ग्राहक जोडण्यासाठी खालील बटनावर दाबा',
+                        message: 'नवीन ग्राहक जोडण्यासाठी खालील बटनावर दाबा',
                         icon: Icons.people_outline_rounded,
                       ),
                     )
@@ -345,7 +345,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       return const Center(
         child: EmptyStateWidget(
           title: 'कोणतीही प्रलंबित मंजुरी नाही',
-          subtitle: 'जेव्हा ग्राहक ॲपवरून स्वतःचे खाते नोंदवतील, तेव्हा ते अर्ज येथे दिसतील.',
+          message: 'जेव्हा ग्राहक ॲपवरून स्वतःचे खाते नोंदवतील, तेव्हा ते अर्ज येथे दिसतील.',
           icon: Icons.check_circle_outline_rounded,
         ),
       );

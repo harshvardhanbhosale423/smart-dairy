@@ -4,6 +4,7 @@ import '../constants/app_colors.dart';
 class EmptyStateWidget extends StatelessWidget {
   final String title;
   final String message;
+  final String? subtitle;
   final IconData icon;
   final String? buttonText;
   final VoidCallback? onButtonPressed;
@@ -11,7 +12,8 @@ class EmptyStateWidget extends StatelessWidget {
   const EmptyStateWidget({
     super.key,
     required this.title,
-    required this.message,
+    this.message = '',
+    this.subtitle,
     this.icon = Icons.inbox_rounded,
     this.buttonText,
     this.onButtonPressed,
@@ -19,6 +21,7 @@ class EmptyStateWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveMessage = (subtitle != null && subtitle!.isNotEmpty) ? subtitle! : message;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32.0),
@@ -27,7 +30,7 @@ class EmptyStateWidget extends StatelessWidget {
           children: [
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: AppColors.softLightGreen,
                 shape: BoxShape.circle,
               ),
@@ -47,15 +50,17 @@ class EmptyStateWidget extends StatelessWidget {
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 6),
-            Text(
-              message,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.textMuted,
+            if (effectiveMessage.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                effectiveMessage,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textMuted,
+                ),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
-            ),
+            ],
             if (buttonText != null && onButtonPressed != null) ...[
               const SizedBox(height: 18),
               ElevatedButton.icon(
