@@ -26,14 +26,47 @@ class CustomerRepository {
     return CustomerModel.fromMap(doc.data()!, doc.id);
   }
 
-  /// Add customer with atomic ledger opening balance
+  /// Add customer with atomic ledger opening balance and app user credentials
   Future<void> addCustomer(CustomerModel customer, {double openingBalance = 0.0}) async {
     final batch = _firestore.batch();
     final custRef = _firestore.collection('customers').doc(customer.id);
 
-    final customerData = customer.toMap();
+    final cleanUsername = (customer.username != null && customer.username!.isNotEmpty)
+        ? customer.username!.trim().toLowerCase()
+        : customer.phone.trim();
+    final cleanPassword = (customer.password != null && customer.password!.isNotEmpty)
+        ? customer.password!.trim()
+        : '123456';
+
+    final userId = customer.userId ?? 'cust_user_${customer.id}';
+
+    final customerToSave = customer.copyWith(
+      userId: userId,
+      username: cleanUsername,
+      password: cleanPassword,
+    );
+
+    final customerData = customerToSave.toMap();
     customerData['currentBalance'] = openingBalance;
     batch.set(custRef, customerData);
+
+    // Create or link app user login document
+    final userRef = _firestore.collection('users').doc(userId);
+    batch.set(userRef, {
+      'uid': userId,
+      'phone': customer.phone.trim(),
+      'username': cleanUsername,
+      'password': cleanPassword,
+      'role': 'customer',
+      'status': 'approved',
+      'name': customer.name.trim(),
+      'dairyId': customer.ownerId,
+      'customerId': customer.id,
+      'morningQuota': customer.morningQuota,
+      'eveningQuota': customer.eveningQuota,
+      'address': customer.address.trim(),
+      'createdAt': FieldValue.serverTimestamp(),
+    });
 
     // If there is an opening balance, create an initial Ledger entry for audit
     if (openingBalance != 0.0) {
@@ -44,7 +77,7 @@ class CustomerRepository {
         'customerId': customer.id,
         'customerName': customer.name,
         'customerPhone': customer.phone,
-        'customerUserId': customer.userId,
+        'customerUserId': userId,
         'type': openingBalance > 0 ? 'DEBIT' : 'CREDIT',
         'category': 'OPENING_BALANCE',
         'amount': openingBalance.abs(),
@@ -62,48 +95,50 @@ class CustomerRepository {
       'action': 'CUSTOMER_CREATED',
       'ownerId': customer.ownerId,
       'customerId': customer.id,
-      'details': 'New customer added: ${customer.name} (${customer.phone})',
+      'details': 'New customer added with credentials: ${customer.name} ($cleanUsername)',
       'timestamp': FieldValue.serverTimestamp(),
     });
 
     await batch.commit();
   }
 
-  /// Update customer details
+  /// Update customer details and user credentials
   Future<void> updateCustomer(CustomerModel customer) async {
-    await _firestore
-        .collection('customers')
-        .doc(customer.id)
-        .update(customer.toMap());
+    final batch = _firestore.batch();
+    batch.update(_firestore.collection('customers').doc(customer.id), customer.toMap());
+
+    if (customer.userId != null) {
+      final cleanUsername = (customer.username != null && customer.username!.isNotEmpty)
+          ? customer.username!.trim().toLowerCase()
+          : customer.phone.trim();
+
+      final userUpdate = <String, dynamic>{
+        'name': customer.name.trim(),
+        'phone': customer.phone.trim(),
+        'username': cleanUsername,
+        'morningQuota': customer.morningQuota,
+        'eveningQuota': customer.eveningQuota,
+        'address': customer.address.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      if (customer.password != null && customer.password!.isNotEmpty) {
+        userUpdate['password'] = customer.password!.trim();
+      }
+
+      batch.update(_firestore.collection('users').doc(customer.userId), userUpdate);
+    }
+
+    await batch.commit();
   }
 
   /// Change customer status (active, paused, inactive)
-  Future<void> updateCustomerStatus(String customerId, String status) async {
-    await _firestore.collection('customers').doc(customerId).update({
-      'status': status,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  /// Delete customer (soft delete or deactivate)
-  Future<void> deleteCustomer(String customerId, String ownerId) async {
-    final batch = _firestore.batch();
-    batch.update(_firestore.collection('customers').doc(customerId), {
-      'status': 'inactive',
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-
-    final auditRef = _firestore.collection('audit_logs').doc();
-    batch.set(auditRef, {
-      'id': auditRef.id,
-      'action': 'CUSTOMER_DEACTIVATED',
-      'ownerId': ownerId,
-      'customerId': customerId,
-      'details': 'Customer deactivated',
-      'timestamp': FieldValue.serverTimestamp(),
-    });
-
-    await batch.commit();
+  Future<void> updateCustomerStatus(String customerId, String newStatus) async {
+    await _firestore
+        .collection('customers')
+        .doc(customerId)
+        .update({
+          'status': newStatus,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
   }
 }
-

@@ -133,6 +133,39 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Pending Approvals Banner
+                    if (auth.pendingApprovalsCount > 0) ...[
+                      InkWell(
+                        onTap: () {
+                          if (widget.onNavigateTab != null) {
+                            widget.onNavigateTab!(1); // Customers tab
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: AppColors.goldLight,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppColors.goldenYellow, width: 1.5),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.notification_important_rounded, color: AppColors.textDark),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  '${auth.pendingApprovalsCount} नवीन ग्राहक अर्ज मंजुरीच्या प्रतीक्षेत आहेत!',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textDark),
+                                ),
+                              ),
+                              const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textDark),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
                     // QUICK ACTION BUTTONS
                     Text(
                       context.tr('quick_actions'),

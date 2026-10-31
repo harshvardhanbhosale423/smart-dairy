@@ -11,7 +11,7 @@ import 'core/localization/locale_provider.dart';
 import 'core/services/notification_service.dart';
 
 import 'features/auth/providers/auth_provider.dart';
-import 'features/auth/screens/phone_login_screen.dart';
+import 'features/auth/screens/login_screen.dart';
 import 'features/customers/providers/customer_provider.dart';
 import 'features/milk_entry/providers/milk_entry_provider.dart';
 import 'features/ledger/providers/ledger_provider.dart';
@@ -109,7 +109,7 @@ class AuthGate extends StatelessWidget {
       }
     }
 
-    return const PhoneLoginScreen();
+    return const LoginScreen();
   }
 }
 

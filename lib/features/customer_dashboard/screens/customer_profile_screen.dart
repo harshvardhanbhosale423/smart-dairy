@@ -6,7 +6,7 @@ import '../../../core/localization/locale_provider.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/widgets/confirmation_dialog.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../../auth/screens/phone_login_screen.dart';
+import '../../auth/screens/login_screen.dart';
 
 class CustomerProfileScreen extends StatelessWidget {
   const CustomerProfileScreen({super.key});
@@ -120,11 +120,11 @@ class CustomerProfileScreen extends StatelessWidget {
                   isDestructive: true,
                 );
                 if (confirm == true) {
-                  await auth.logout();
+                  await auth.signOut();
                   if (context.mounted) {
                     Navigator.pushAndRemoveUntil(
                       context,
-                      MaterialPageRoute(builder: (_) => const PhoneLoginScreen()),
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
                       (route) => false,
                     );
                   }

@@ -210,6 +210,79 @@ class CustomerDetailScreen extends StatelessWidget {
 
             const SizedBox(height: 16),
 
+            // App Credentials Card & WhatsApp Share
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkCard : AppColors.softCream,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.primaryGreen.withOpacity(0.4)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: const [
+                      Icon(Icons.vpn_key_rounded, color: AppColors.darkGreen, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'ग्राहक ॲप लॉगिन माहिती (Login Details)',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.darkGreen),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('युझरनेम (Username):', style: TextStyle(fontWeight: FontWeight.w500)),
+                      SelectableText(
+                        currentCustomer.username ?? currentCustomer.phone,
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.darkGreen),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('पासवर्ड (Password):', style: TextStyle(fontWeight: FontWeight.w500)),
+                      SelectableText(
+                        currentCustomer.password ?? '123456',
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.darkGreen),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        final u = currentCustomer.username ?? currentCustomer.phone;
+                        final p = currentCustomer.password ?? '123456';
+                        final msg = 'नमस्कार ${currentCustomer.name},\nस्मार्ट डेअरी ॲपमध्ये आपले स्वागत आहे! 🥛\n\nआपले लॉगिन तपशील:\nयुझरनेम: $u\nपासवर्ड: $p\n\nॲप डाऊनलोड करा:\nhttps://github.com/harshvardhanbhosale423/smart-dairy/releases/download/v1.0.0/app-release.apk';
+                        var cleanPhone = currentCustomer.phone.replaceAll(RegExp(r'\D'), '');
+                        if (cleanPhone.length == 10) cleanPhone = '91$cleanPhone';
+                        final uri = Uri.parse('https://wa.me/$cleanPhone?text=${Uri.encodeComponent(msg)}');
+                        launchUrl(uri, mode: LaunchMode.externalApplication);
+                      },
+                      icon: const Icon(Icons.share_rounded, color: AppColors.darkGreen, size: 18),
+                      label: const Text(
+                        'WhatsApp वर लॉगिन माहिती पाठवा',
+                        style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.darkGreen),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.darkGreen),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
             // Customer Status Toggle & Actions
             Row(
               children: [

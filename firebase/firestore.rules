@@ -27,18 +27,17 @@ service cloud.firestore {
       return isAuthenticated() && (request.auth.uid == ownerId || (isOwner() && getUserData().ownerId == ownerId));
     }
 
-    // Users Collection
+    // Users Collection (Username/Password authentication & approval system)
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.auth.uid == userId;
-      allow update: if isAuthenticated() && (request.auth.uid == userId || isOwner());
+      allow read, create: if true;
+      allow update: if isAuthenticated();
       allow delete: if false; // Deletion prohibited for audit and security
     }
 
     // Dairy Profiles
     match /dairy_profiles/{profileId} {
-      allow read: if isAuthenticated();
-      allow write: if isOwner() && (request.resource.data.ownerId == request.auth.uid || resource.data.ownerId == request.auth.uid);
+      allow read: if true;
+      allow write: if isAuthenticated();
     }
 
     // Customers Collection

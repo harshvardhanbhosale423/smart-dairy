@@ -1,105 +1,85 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
-import '../../settings/models/dairy_settings_model.dart';
+import '../../customers/models/customer_model.dart';
 
-enum AuthStatus { unauthenticated, authenticating, codeSent, authenticated, error }
+enum AuthStatus { unauthenticated, authenticating, authenticated, error }
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
 
   AuthStatus _status = AuthStatus.unauthenticated;
   UserModel? _currentUser;
-  DairySettingsModel? _dairySettings;
-  String? _verificationId;
-  String? _phoneNumber;
   String? _errorMessage;
-  int _resendTimer = 60;
-  Timer? _countdownTimer;
+  List<UserModel> _pendingApprovals = [];
+  StreamSubscription<List<UserModel>>? _approvalsSubscription;
 
   AuthStatus get status => _status;
   UserModel? get currentUser => _currentUser;
-  DairySettingsModel? get dairySettings => _dairySettings;
-  String? get verificationId => _verificationId;
-  String? get phoneNumber => _phoneNumber;
   String? get errorMessage => _errorMessage;
-  int get resendTimer => _resendTimer;
-  bool get canResendOtp => _resendTimer == 0;
+  List<UserModel> get pendingApprovals => _pendingApprovals;
+  int get pendingApprovalsCount => _pendingApprovals.length;
   bool get isOwner => _currentUser?.isOwner ?? false;
   bool get isCustomer => _currentUser?.isCustomer ?? false;
 
   AuthProvider() {
-    _initCurrentUser();
+    restoreSession();
   }
 
-  Future<void> _initCurrentUser() async {
-    final fbUser = _authService.currentFirebaseUser;
-    if (fbUser != null) {
-      _status = AuthStatus.authenticating;
-      notifyListeners();
-      _currentUser = await _authService.getUserProfile(fbUser.uid);
-      _status = _currentUser != null ? AuthStatus.authenticated : AuthStatus.unauthenticated;
-      notifyListeners();
-    }
+  @override
+  void dispose() {
+    _approvalsSubscription?.cancel();
+    super.dispose();
   }
 
-  /// Request OTP
-  Future<bool> sendOtp(String phone) async {
+  /// Restore saved session
+  Future<void> restoreSession() async {
     _status = AuthStatus.authenticating;
-    _phoneNumber = phone;
-    _errorMessage = null;
     notifyListeners();
 
-    final completer = Completer<bool>();
-
-    await _authService.sendOtp(
-      phoneNumber: phone,
-      onCodeSent: (vId) {
-        _verificationId = vId;
-        _status = AuthStatus.codeSent;
-        _startTimer();
-        notifyListeners();
-        completer.complete(true);
-      },
-      onError: (msg) {
-        _errorMessage = msg;
-        _status = AuthStatus.error;
-        notifyListeners();
-        completer.complete(false);
-      },
-      onAutoVerify: (credential) async {
-        try {
-          final result = await FirebaseAuth.instance.signInWithCredential(credential);
-          if (result.user != null) {
-            _currentUser = await _authService.getUserProfile(result.user!.uid);
-            _status = AuthStatus.authenticated;
-            notifyListeners();
-          }
-        } catch (_) {}
-      },
-    );
-
-    return completer.future;
+    try {
+      _currentUser = await _authService.restoreSession();
+      if (_currentUser != null) {
+        _status = AuthStatus.authenticated;
+        if (_currentUser!.isOwner) {
+          _listenToPendingApprovals(_currentUser!.uid);
+        }
+      } else {
+        _status = AuthStatus.unauthenticated;
+      }
+    } catch (_) {
+      _status = AuthStatus.unauthenticated;
+    }
+    notifyListeners();
   }
 
-  /// Verify OTP
-  Future<bool> verifyOtp(String code) async {
+  /// Listen to pending customer approvals for Dairy Owner
+  void _listenToPendingApprovals(String ownerId) {
+    _approvalsSubscription?.cancel();
+    _approvalsSubscription = _authService.streamPendingApprovals(ownerId).listen((list) {
+      _pendingApprovals = list;
+      notifyListeners();
+    });
+  }
+
+  /// Login with Username or Phone & Password
+  Future<bool> login(String identifier, String password) async {
     _status = AuthStatus.authenticating;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final credential = await _authService.verifyOtp(smsCode: code, verificationId: _verificationId);
-      if (credential.user != null) {
-        _currentUser = await _authService.getUserProfile(credential.user!.uid);
-        _status = AuthStatus.authenticated;
-        _stopTimer();
-        notifyListeners();
-        return true;
+      _currentUser = await _authService.loginWithUsernameAndPassword(
+        identifier: identifier,
+        password: password,
+      );
+      _status = AuthStatus.authenticated;
+      if (_currentUser!.isOwner) {
+        _listenToPendingApprovals(_currentUser!.uid);
       }
-      return false;
+      notifyListeners();
+      return true;
     } catch (e) {
       _errorMessage = e.toString();
       _status = AuthStatus.error;
@@ -110,6 +90,9 @@ class AuthProvider extends ChangeNotifier {
 
   /// Register Owner
   Future<bool> registerOwner({
+    required String username,
+    required String password,
+    required String phone,
     required String ownerName,
     required String dairyName,
     required String upiId,
@@ -117,16 +100,15 @@ class AuthProvider extends ChangeNotifier {
     int cowCount = 5,
     double defaultMilkRate = 60.0,
   }) async {
-    final fbUser = _authService.currentFirebaseUser;
-    if (fbUser == null) return false;
-
     _status = AuthStatus.authenticating;
+    _errorMessage = null;
     notifyListeners();
 
     try {
-      await _authService.registerOwner(
-        uid: fbUser.uid,
-        phone: fbUser.phoneNumber ?? _phoneNumber ?? '',
+      _currentUser = await _authService.registerOwner(
+        username: username,
+        password: password,
+        phone: phone,
         ownerName: ownerName,
         dairyName: dairyName,
         upiId: upiId,
@@ -134,9 +116,8 @@ class AuthProvider extends ChangeNotifier {
         cowCount: cowCount,
         defaultMilkRate: defaultMilkRate,
       );
-
-      _currentUser = await _authService.getUserProfile(fbUser.uid);
       _status = AuthStatus.authenticated;
+      _listenToPendingApprovals(_currentUser!.uid);
       notifyListeners();
       return true;
     } catch (e) {
@@ -147,27 +128,33 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Link Customer Account
-  Future<bool> linkCustomer({
-    required String customerId,
-    required String customerName,
+  /// Self-Register Customer
+  Future<bool> registerCustomerSelf({
+    required String name,
+    required String phone,
+    required String username,
+    required String password,
+    required String address,
+    required String dairyId,
+    double morningQuota = 1.0,
+    double eveningQuota = 1.0,
   }) async {
-    final fbUser = _authService.currentFirebaseUser;
-    if (fbUser == null) return false;
-
     _status = AuthStatus.authenticating;
+    _errorMessage = null;
     notifyListeners();
 
     try {
-      await _authService.linkCustomerUser(
-        uid: fbUser.uid,
-        phone: fbUser.phoneNumber ?? _phoneNumber ?? '',
-        customerId: customerId,
-        customerName: customerName,
+      await _authService.registerCustomerSelf(
+        name: name,
+        phone: phone,
+        username: username,
+        password: password,
+        address: address,
+        dairyId: dairyId,
+        morningQuota: morningQuota,
+        eveningQuota: eveningQuota,
       );
-
-      _currentUser = await _authService.getUserProfile(fbUser.uid);
-      _status = AuthStatus.authenticated;
+      _status = AuthStatus.unauthenticated;
       notifyListeners();
       return true;
     } catch (e) {
@@ -178,41 +165,67 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Check if phone number is registered by owner
-  Future<Map<String, dynamic>?> checkCustomerPreRegistered(String phone) async {
-    return await _authService.findCustomerByPhone(phone);
+  /// Approve Pending Customer (By Owner)
+  Future<bool> approveCustomer({
+    required UserModel pendingUser,
+    required double milkRate,
+    double? morningQuota,
+    double? eveningQuota,
+  }) async {
+    try {
+      await _authService.approveCustomer(
+        pendingUser: pendingUser,
+        milkRate: milkRate,
+        morningQuota: morningQuota,
+        eveningQuota: eveningQuota,
+      );
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString();
+      notifyListeners();
+      return false;
+    }
   }
 
-  void _startTimer() {
-    _resendTimer = 60;
-    _countdownTimer?.cancel();
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_resendTimer > 0) {
-        _resendTimer--;
-        notifyListeners();
-      } else {
-        _countdownTimer?.cancel();
-      }
-    });
+  /// Reject Pending Customer (By Owner)
+  Future<bool> rejectCustomer(String uid) async {
+    try {
+      await _authService.rejectCustomer(uid);
+      return true;
+    } catch (e) {
+      _errorMessage = e.toString();
+      notifyListeners();
+      return false;
+    }
   }
 
-  void _stopTimer() {
-    _countdownTimer?.cancel();
+  /// Owner creates customer with login credentials directly
+  Future<String> createCustomerWithCredentials({
+    required CustomerModel customer,
+    required String username,
+    required String password,
+  }) async {
+    if (_currentUser == null) throw 'Not logged in';
+    return await _authService.createCustomerWithCredentials(
+      ownerId: _currentUser!.uid,
+      customer: customer,
+      username: username,
+      password: password,
+    );
   }
 
-  Future<void> logout() async {
+  /// Get list of all dairies for customer registration dropdown
+  Future<List<Map<String, dynamic>>> getAvailableDairies() async {
+    return await _authService.getAvailableDairies();
+  }
+
+  /// Sign Out
+  Future<void> signOut() async {
+    _approvalsSubscription?.cancel();
     await _authService.signOut();
     _currentUser = null;
-    _dairySettings = null;
     _status = AuthStatus.unauthenticated;
-    _stopTimer();
+    _pendingApprovals = [];
     notifyListeners();
   }
-
-  @override
-  void dispose() {
-    _countdownTimer?.cancel();
-    super.dispose();
-  }
 }
-

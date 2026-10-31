@@ -4,6 +4,8 @@ class CustomerModel {
   final String? userId; // Linked user account UID
   final String name;
   final String phone;
+  final String? username;
+  final String? password;
   final String address;
   final double morningQuota;
   final double eveningQuota;
@@ -21,6 +23,8 @@ class CustomerModel {
     this.userId,
     required this.name,
     required this.phone,
+    this.username,
+    this.password,
     this.address = '',
     this.morningQuota = 1.0,
     this.eveningQuota = 1.0,
@@ -45,6 +49,8 @@ class CustomerModel {
       userId: map['userId'],
       name: map['name'] ?? '',
       phone: map['phone'] ?? '',
+      username: map['username'],
+      password: map['password'],
       address: map['address'] ?? '',
       morningQuota: (map['morningQuota'] ?? 1.0).toDouble(),
       eveningQuota: (map['eveningQuota'] ?? 1.0).toDouble(),
@@ -70,6 +76,8 @@ class CustomerModel {
       'userId': userId,
       'name': name,
       'phone': phone,
+      'username': username,
+      'password': password,
       'address': address,
       'morningQuota': morningQuota,
       'eveningQuota': eveningQuota,
@@ -84,9 +92,13 @@ class CustomerModel {
   }
 
   CustomerModel copyWith({
+    String? id,
+    String? ownerId,
     String? userId,
     String? name,
     String? phone,
+    String? username,
+    String? password,
     String? address,
     double? morningQuota,
     double? eveningQuota,
@@ -95,13 +107,17 @@ class CustomerModel {
     String? status,
     double? currentBalance,
     String? notes,
+    DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return CustomerModel(
-      id: id,
-      ownerId: ownerId,
+      id: id ?? this.id,
+      ownerId: ownerId ?? this.ownerId,
       userId: userId ?? this.userId,
       name: name ?? this.name,
       phone: phone ?? this.phone,
+      username: username ?? this.username,
+      password: password ?? this.password,
       address: address ?? this.address,
       morningQuota: morningQuota ?? this.morningQuota,
       eveningQuota: eveningQuota ?? this.eveningQuota,
@@ -110,9 +126,8 @@ class CustomerModel {
       status: status ?? this.status,
       currentBalance: currentBalance ?? this.currentBalance,
       notes: notes ?? this.notes,
-      createdAt: createdAt,
-      updatedAt: DateTime.now(),
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 }
-

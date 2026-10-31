@@ -9,12 +9,7 @@ import '../providers/auth_provider.dart';
 import '../../owner_dashboard/screens/owner_main_nav_screen.dart';
 
 class OwnerRegisterScreen extends StatefulWidget {
-  final String phoneNumber;
-
-  const OwnerRegisterScreen({
-    super.key,
-    required this.phoneNumber,
-  });
+  const OwnerRegisterScreen({super.key});
 
   @override
   State<OwnerRegisterScreen> createState() => _OwnerRegisterScreenState();
@@ -24,15 +19,22 @@ class _OwnerRegisterScreenState extends State<OwnerRegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _ownerNameController = TextEditingController();
   final _dairyNameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
   final _upiIdController = TextEditingController();
   final _cowCountController = TextEditingController(text: '5');
   final _rateController = TextEditingController(text: '60');
   final _addressController = TextEditingController();
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
     _ownerNameController.dispose();
     _dairyNameController.dispose();
+    _phoneController.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
     _upiIdController.dispose();
     _cowCountController.dispose();
     _rateController.dispose();
@@ -45,6 +47,9 @@ class _OwnerRegisterScreenState extends State<OwnerRegisterScreen> {
 
     final auth = context.read<AuthProvider>();
     final success = await auth.registerOwner(
+      username: _usernameController.text.trim(),
+      password: _passwordController.text.trim(),
+      phone: _phoneController.text.trim(),
       ownerName: _ownerNameController.text.trim(),
       dairyName: _dairyNameController.text.trim(),
       upiId: _upiIdController.text.trim(),
@@ -93,105 +98,145 @@ class _OwnerRegisterScreenState extends State<OwnerRegisterScreen> {
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Row(
-                    children: [
-                      const Icon(Icons.verified_user_rounded, color: AppColors.darkGreen, size: 28),
-                      const SizedBox(width: 12),
+                    children: const [
+                      Icon(Icons.business_center_rounded, color: AppColors.darkGreen, size: 28),
+                      SizedBox(width: 12),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Setup Dairy Business Profile',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.darkGreen),
-                            ),
-                            Text(
-                              'Phone: +91 ${widget.phoneNumber}',
-                              style: const TextStyle(fontSize: 12, color: AppColors.darkGreen),
-                            ),
-                          ],
+                        child: Text(
+                          'डेअरी मालक खाते तयार करा\n(Create Dairy Owner Account)',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.darkGreen,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 20),
 
+                // Owner Name
                 CustomTextField(
-                  controller: _dairyNameController,
-                  label: '${context.tr('dairy_name')} *',
-                  hint: 'उदा. माऊली डेअरी फार्म / Mauli Dairy',
-                  prefixIcon: Icons.store_rounded,
-                  validator: (v) => Validators.validateRequired(v, context.tr('dairy_name')),
-                ),
-
-                const SizedBox(height: 16),
-
-                CustomTextField(
+                  label: 'मालकाचे नाव (Owner Name)',
+                  hint: 'उदा. हर्षवर्धन भोसले',
                   controller: _ownerNameController,
-                  label: '${context.tr('name')} *',
-                  hint: 'उदा. राहुल रमेश पाटील',
-                  prefixIcon: Icons.person_rounded,
-                  validator: (v) => Validators.validateRequired(v, context.tr('name')),
+                  prefixIcon: const Icon(Icons.person_rounded, color: AppColors.darkGreen),
+                  validator: Validators.required,
                 ),
+                const SizedBox(height: 14),
 
-                const SizedBox(height: 16),
-
+                // Dairy Name
                 CustomTextField(
-                  controller: _upiIdController,
-                  label: '${context.tr('upi_id')} *',
-                  hint: 'उदा. 9822000000@ybl किंवा rahul@oksbi',
-                  prefixIcon: Icons.qr_code_rounded,
-                  validator: Validators.validateUpiId,
+                  label: context.tr('dairy_name'),
+                  hint: 'उदा. भोसले दूध डेअरी',
+                  controller: _dairyNameController,
+                  prefixIcon: const Icon(Icons.store_rounded, color: AppColors.darkGreen),
+                  validator: Validators.required,
                 ),
+                const SizedBox(height: 14),
 
-                const SizedBox(height: 16),
+                // Phone
+                CustomTextField(
+                  label: context.tr('phone_number'),
+                  hint: '१० अंकी मोबाईल नंबर',
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  prefixIcon: const Icon(Icons.phone_android_rounded, color: AppColors.darkGreen),
+                  validator: Validators.phone,
+                ),
+                const SizedBox(height: 14),
 
+                // Username
+                CustomTextField(
+                  label: 'लॉगिन युझरनेम (Username)',
+                  hint: 'उदा. harsh_dairy किंवा मोबाईल नंबर',
+                  controller: _usernameController,
+                  prefixIcon: const Icon(Icons.alternate_email_rounded, color: AppColors.darkGreen),
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) return 'युझरनेम आवश्यक आहे';
+                    if (val.trim().length < 3) return 'किमान ३ अक्षरे असावी';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 14),
+
+                // Password
+                CustomTextField(
+                  label: 'लॉगिन पासवर्ड (Password)',
+                  hint: 'किमान ४ ते ६ अक्षरांचा पासवर्ड',
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  prefixIcon: const Icon(Icons.lock_rounded, color: AppColors.darkGreen),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      color: AppColors.secondaryText,
+                    ),
+                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                  ),
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) return 'पासवर्ड आवश्यक आहे';
+                    if (val.trim().length < 4) return 'पासवर्ड किमान ४ अक्षरांचा असावा';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 14),
+
+                // UPI ID
+                CustomTextField(
+                  label: context.tr('upi_id'),
+                  hint: 'उदा. 9822000000@oksbi / name@paytm',
+                  controller: _upiIdController,
+                  prefixIcon: const Icon(Icons.qr_code_rounded, color: AppColors.darkGreen),
+                  validator: Validators.upiId,
+                ),
+                const SizedBox(height: 14),
+
+                // Address
+                CustomTextField(
+                  label: context.tr('address'),
+                  hint: 'डेअरीचा पत्ता / गाव',
+                  controller: _addressController,
+                  maxLines: 2,
+                  prefixIcon: const Icon(Icons.location_on_rounded, color: AppColors.darkGreen),
+                  validator: Validators.required,
+                ),
+                const SizedBox(height: 14),
+
+                // Cow count & Default rate
                 Row(
                   children: [
                     Expanded(
                       child: CustomTextField(
-                        controller: _cowCountController,
                         label: context.tr('cows_owned'),
                         hint: '5',
+                        controller: _cowCountController,
                         keyboardType: TextInputType.number,
-                        prefixIcon: Icons.pets_rounded,
-                        validator: (v) => Validators.validateNumber(v, context.tr('cows_owned')),
+                        validator: Validators.required,
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: CustomTextField(
-                        controller: _rateController,
-                        label: '${context.tr('milk_rate')} *',
+                        label: 'दूध दर (₹/Litre)',
                         hint: '60',
+                        controller: _rateController,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        prefixIcon: Icons.currency_rupee_rounded,
-                        validator: (v) => Validators.validateNumber(v, context.tr('milk_rate'), allowZero: false),
+                        validator: Validators.required,
                       ),
                     ),
                   ],
                 ),
-
-                const SizedBox(height: 16),
-
-                CustomTextField(
-                  controller: _addressController,
-                  label: context.tr('address'),
-                  hint: 'गाव, तालुका, जिल्हा',
-                  prefixIcon: Icons.location_on_rounded,
-                  maxLines: 2,
-                ),
-
                 const SizedBox(height: 28),
 
+                // Submit Button
                 CustomButton(
-                  text: context.tr('save'),
+                  text: 'डेअरी खाते सुरू करा (Register)',
                   icon: Icons.check_circle_rounded,
                   isLoading: auth.status == AuthStatus.authenticating,
                   onPressed: _onRegister,
                 ),
-
                 const SizedBox(height: 20),
               ],
             ),
@@ -201,4 +246,3 @@ class _OwnerRegisterScreenState extends State<OwnerRegisterScreen> {
     );
   }
 }
-

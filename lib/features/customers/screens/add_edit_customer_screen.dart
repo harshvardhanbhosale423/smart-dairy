@@ -24,6 +24,8 @@ class _AddEditCustomerScreenState extends State<AddEditCustomerScreen> {
 
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
+  late TextEditingController _usernameController;
+  late TextEditingController _passwordController;
   late TextEditingController _addressController;
   late TextEditingController _morningController;
   late TextEditingController _eveningController;
@@ -42,6 +44,8 @@ class _AddEditCustomerScreenState extends State<AddEditCustomerScreen> {
     final c = widget.customer;
     _nameController = TextEditingController(text: c?.name ?? '');
     _phoneController = TextEditingController(text: c?.phone ?? '');
+    _usernameController = TextEditingController(text: c?.username ?? c?.phone ?? '');
+    _passwordController = TextEditingController(text: c?.password ?? '123456');
     _addressController = TextEditingController(text: c?.address ?? '');
     _morningController = TextEditingController(text: c?.morningQuota.toString() ?? '1.0');
     _eveningController = TextEditingController(text: c?.eveningQuota.toString() ?? '1.0');
@@ -56,6 +60,8 @@ class _AddEditCustomerScreenState extends State<AddEditCustomerScreen> {
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
     _addressController.dispose();
     _morningController.dispose();
     _eveningController.dispose();
@@ -90,10 +96,19 @@ class _AddEditCustomerScreenState extends State<AddEditCustomerScreen> {
     final openingBal = double.tryParse(_openingBalanceController.text.trim()) ?? 0.0;
 
     bool success;
+    final usernameVal = _usernameController.text.trim().isNotEmpty
+        ? _usernameController.text.trim()
+        : _phoneController.text.trim();
+    final passwordVal = _passwordController.text.trim().isNotEmpty
+        ? _passwordController.text.trim()
+        : '123456';
+
     if (isEditing) {
       final updated = widget.customer!.copyWith(
         name: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
+        username: usernameVal,
+        password: passwordVal,
         address: _addressController.text.trim(),
         morningQuota: morning,
         eveningQuota: evening,
@@ -108,6 +123,8 @@ class _AddEditCustomerScreenState extends State<AddEditCustomerScreen> {
         ownerId: user.uid,
         name: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
+        username: usernameVal,
+        password: passwordVal,
         address: _addressController.text.trim(),
         morningQuota: morning,
         eveningQuota: evening,
@@ -279,6 +296,52 @@ class _AddEditCustomerScreenState extends State<AddEditCustomerScreen> {
                   ),
                   const SizedBox(height: 16),
                 ],
+
+                // Customer App Login Credentials Card
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.softCream,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.primaryGreen.withOpacity(0.35)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: const [
+                          Icon(Icons.lock_person_rounded, color: AppColors.darkGreen, size: 22),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'ग्राहक ॲप लॉगिन तपशील (App Login Credentials)',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.darkGreen,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      CustomTextField(
+                        controller: _usernameController,
+                        label: 'लॉगिन युझरनेम (Username)',
+                        hint: 'उदा. मोबाईल नंबर किंवा नाव',
+                        prefixIcon: Icons.alternate_email_rounded,
+                      ),
+                      const SizedBox(height: 12),
+                      CustomTextField(
+                        controller: _passwordController,
+                        label: 'लॉगिन पासवर्ड (Password)',
+                        hint: 'उदा. 123456',
+                        prefixIcon: Icons.key_rounded,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
 
                 CustomTextField(
                   controller: _notesController,

@@ -64,9 +64,9 @@ jobs:
         if: success() && github.ref == 'refs/heads/main'
         continue-on-error: true
         with:
-          tag_name: v1.0.0
-          name: "Smart Dairy v1.0.0 - Android APK"
-          body: "Official Release APK for Smart Dairy Application"
+          tag_name: v1.0.1
+          name: "Smart Dairy v1.0.1 - Username & Password APK"
+          body: "Smart Dairy Android APK with Username & Password Login and Customer Approval System"
           files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
