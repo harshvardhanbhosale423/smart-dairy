@@ -116,14 +116,15 @@ class ReportService {
     return BusinessReportData(
       startDate: startDate,
       endDate: endDate,
-      totalMilkLitres: totalMilkLitres,
-      totalBilledSales: billedSales,
-      totalCashCollected: cashCollected,
-      totalExpenses: totalExpenses,
-      netProfitOrLoss: cashCollected - totalExpenses,
+      totalMilkDeliveredLitres: totalMilkLitres,
+      billedSalesAmount: billedSales,
+      actualCashCollected: cashCollected,
       outstandingDues: totalPendingDues,
-      salesTrend: sortedTrend,
-      expenseCategoryBreakdown: categoryBreakdown,
+      totalExpenses: totalExpenses,
+      netCashProfit: cashCollected - totalExpenses,
+      netBilledProfit: billedSales - totalExpenses,
+      categoryWiseExpenses: categoryBreakdown,
+      dailySalesTrend: sortedTrend,
     );
   }
 }
