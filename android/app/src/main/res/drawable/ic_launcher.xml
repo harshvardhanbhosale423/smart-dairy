@@ -1,11 +1,86 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="48dp"
-    android:height="48dp"
-    android:viewportWidth="48"
-    android:viewportHeight="48">
-    <path
-        android:fillColor="#14532D"
-        android:pathData="M24,24m-20,0a20,20 0,1 1,40 0a20,20 0,1 1,-40 0"/>
-</vector>
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
 
+    <!-- Green Circle Background -->
+    <path
+        android:fillColor="#1B5E20"
+        android:pathData="M54,54m-48,0a48,48 0,1 1,96 0a48,48 0,1 1,-96 0" />
+
+    <!-- Inner Light Green Ring -->
+    <path
+        android:strokeColor="#81C784"
+        android:strokeWidth="2.5"
+        android:pathData="M54,54m-45,0a45,45 0,1 1,90 0a45,45 0,1 1,-90 0" />
+
+    <!-- Cow Horns (Golden Yellow) -->
+    <path
+        android:fillColor="#FDD835"
+        android:pathData="M44,38 C42,32 38,24 33,23 C31,23 32,26 35,30 C38,34 40,38 41,41 Z" />
+    <path
+        android:fillColor="#FDD835"
+        android:pathData="M64,38 C66,32 70,24 75,23 C77,23 76,26 73,30 C70,34 68,38 67,41 Z" />
+
+    <!-- Cow Ears (White outer, Pink inner) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M42,42 C34,40 22,44 24,52 C26,56 36,53 43,48 Z" />
+    <path
+        android:fillColor="#FFCDD2"
+        android:pathData="M40,43 C35,42 26,45 27,50 C29,53 36,51 41,47 Z" />
+
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M66,42 C74,40 86,44 84,52 C82,56 72,53 65,48 Z" />
+    <path
+        android:fillColor="#FFCDD2"
+        android:pathData="M68,43 C73,42 82,45 81,50 C79,53 72,51 67,47 Z" />
+
+    <!-- Cow Head / Face (Crisp White) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M41,37 C46,36 62,36 67,37 C70,41 71,48 70,57 C69,63 68,69 67,73 C62,77 46,77 41,73 C40,69 39,63 38,57 C37,48 38,41 41,37 Z" />
+
+    <!-- Dairy Green Spot on Face -->
+    <path
+        android:fillColor="#1B5E20"
+        android:pathData="M64,38 C67,40 70,45 69,50 C67,54 63,52 62,47 C61,43 62,39 64,38 Z" />
+
+    <!-- Cow Eyes -->
+    <path
+        android:fillColor="#212121"
+        android:pathData="M46,49m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+    <path
+        android:fillColor="#212121"
+        android:pathData="M62,49m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M47,48m-1,0a1,1 0,1 1,2 0a1,1 0,1 1,-2 0" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M63,48m-1,0a1,1 0,1 1,2 0a1,1 0,1 1,-2 0" />
+
+    <!-- Cow Muzzle / Snout (Soft Cream Peach) -->
+    <path
+        android:fillColor="#FFE0B2"
+        android:pathData="M37,63 C37,58 71,58 71,63 C72,70 71,78 66,81 C59,83 49,83 42,81 C37,78 36,70 37,63 Z" />
+
+    <!-- Nostrils -->
+    <path
+        android:fillColor="#5D4037"
+        android:pathData="M47,69m-2.2,0a2.2,2.2 0,1 1,4.4 0a2.2,2.2 0,1 1,-4.4 0" />
+    <path
+        android:fillColor="#5D4037"
+        android:pathData="M61,69m-2.2,0a2.2,2.2 0,1 1,4.4 0a2.2,2.2 0,1 1,-4.4 0" />
+
+    <!-- Friendly Smile -->
+    <path
+        android:strokeColor="#5D4037"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M50,75 C52,77 56,77 58,75" />
+
+</vector>
