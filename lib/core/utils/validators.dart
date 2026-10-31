@@ -1,4 +1,15 @@
 class Validators {
+  static String? required(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'हे फील्ड आवश्यक आहे / This field is required';
+    }
+    return null;
+  }
+
+  static String? phone(String? value) => validatePhone(value);
+
+  static String? upiId(String? value) => validateUpiId(value);
+
   static String? validatePhone(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'कृपया मोबाईल नंबर टाका / Please enter mobile number';
