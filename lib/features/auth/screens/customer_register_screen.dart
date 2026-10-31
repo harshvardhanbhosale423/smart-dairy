@@ -175,7 +175,7 @@ class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
                   label: 'आपले पूर्ण नाव (Customer Name)',
                   hint: 'उदा. राहुल पाटील',
                   controller: _nameController,
-                  prefixIcon: const Icon(Icons.person_outline_rounded, color: AppColors.darkGreen),
+                  prefixIcon: Icons.person_outline_rounded,
                   validator: Validators.required,
                 ),
                 const SizedBox(height: 14),
@@ -186,7 +186,7 @@ class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
                   hint: '१० अंकी मोबाईल नंबर',
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
-                  prefixIcon: const Icon(Icons.phone_android_rounded, color: AppColors.darkGreen),
+                  prefixIcon: Icons.phone_android_rounded,
                   validator: Validators.phone,
                 ),
                 const SizedBox(height: 14),
@@ -196,7 +196,7 @@ class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
                   label: 'लॉगिन युझरनेम (Username)',
                   hint: 'उदा. rahul12 किंवा मोबाईल नंबर',
                   controller: _usernameController,
-                  prefixIcon: const Icon(Icons.alternate_email_rounded, color: AppColors.darkGreen),
+                  prefixIcon: Icons.alternate_email_rounded,
                   validator: (val) {
                     if (val == null || val.trim().isEmpty) return 'युझरनेम आवश्यक आहे';
                     return null;
@@ -210,7 +210,7 @@ class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
                   hint: 'आपला पासवर्ड ठेवा',
                   controller: _passwordController,
                   obscureText: _obscurePassword,
-                  prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.darkGreen),
+                  prefixIcon: Icons.lock_outline_rounded,
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
@@ -294,7 +294,7 @@ class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
                   hint: 'घर क्र., गल्ली, परिसर',
                   controller: _addressController,
                   maxLines: 2,
-                  prefixIcon: const Icon(Icons.location_on_outlined, color: AppColors.darkGreen),
+                  prefixIcon: Icons.location_on_outlined,
                   validator: Validators.required,
                 ),
                 const SizedBox(height: 28),
@@ -315,3 +315,4 @@ class _CustomerRegisterScreenState extends State<CustomerRegisterScreen> {
     );
   }
 }
+

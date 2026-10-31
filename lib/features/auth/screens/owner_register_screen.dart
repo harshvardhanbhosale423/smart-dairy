@@ -121,7 +121,7 @@ class _OwnerRegisterScreenState extends State<OwnerRegisterScreen> {
                   label: 'मालकाचे नाव (Owner Name)',
                   hint: 'उदा. हर्षवर्धन भोसले',
                   controller: _ownerNameController,
-                  prefixIcon: const Icon(Icons.person_rounded, color: AppColors.darkGreen),
+                  prefixIcon: Icons.person_rounded,
                   validator: Validators.required,
                 ),
                 const SizedBox(height: 14),
@@ -131,7 +131,7 @@ class _OwnerRegisterScreenState extends State<OwnerRegisterScreen> {
                   label: context.tr('dairy_name'),
                   hint: 'उदा. भोसले दूध डेअरी',
                   controller: _dairyNameController,
-                  prefixIcon: const Icon(Icons.store_rounded, color: AppColors.darkGreen),
+                  prefixIcon: Icons.store_rounded,
                   validator: Validators.required,
                 ),
                 const SizedBox(height: 14),
@@ -142,7 +142,7 @@ class _OwnerRegisterScreenState extends State<OwnerRegisterScreen> {
                   hint: '१० अंकी मोबाईल नंबर',
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
-                  prefixIcon: const Icon(Icons.phone_android_rounded, color: AppColors.darkGreen),
+                  prefixIcon: Icons.phone_android_rounded,
                   validator: Validators.phone,
                 ),
                 const SizedBox(height: 14),
@@ -152,7 +152,7 @@ class _OwnerRegisterScreenState extends State<OwnerRegisterScreen> {
                   label: 'लॉगिन युझरनेम (Username)',
                   hint: 'उदा. harsh_dairy किंवा मोबाईल नंबर',
                   controller: _usernameController,
-                  prefixIcon: const Icon(Icons.alternate_email_rounded, color: AppColors.darkGreen),
+                  prefixIcon: Icons.alternate_email_rounded,
                   validator: (val) {
                     if (val == null || val.trim().isEmpty) return 'युझरनेम आवश्यक आहे';
                     if (val.trim().length < 3) return 'किमान ३ अक्षरे असावी';
@@ -167,7 +167,7 @@ class _OwnerRegisterScreenState extends State<OwnerRegisterScreen> {
                   hint: 'किमान ४ ते ६ अक्षरांचा पासवर्ड',
                   controller: _passwordController,
                   obscureText: _obscurePassword,
-                  prefixIcon: const Icon(Icons.lock_rounded, color: AppColors.darkGreen),
+                  prefixIcon: Icons.lock_rounded,
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
@@ -188,7 +188,7 @@ class _OwnerRegisterScreenState extends State<OwnerRegisterScreen> {
                   label: context.tr('upi_id'),
                   hint: 'उदा. 9822000000@oksbi / name@paytm',
                   controller: _upiIdController,
-                  prefixIcon: const Icon(Icons.qr_code_rounded, color: AppColors.darkGreen),
+                  prefixIcon: Icons.qr_code_rounded,
                   validator: Validators.upiId,
                 ),
                 const SizedBox(height: 14),
@@ -199,7 +199,7 @@ class _OwnerRegisterScreenState extends State<OwnerRegisterScreen> {
                   hint: 'डेअरीचा पत्ता / गाव',
                   controller: _addressController,
                   maxLines: 2,
-                  prefixIcon: const Icon(Icons.location_on_rounded, color: AppColors.darkGreen),
+                  prefixIcon: Icons.location_on_rounded,
                   validator: Validators.required,
                 ),
                 const SizedBox(height: 14),

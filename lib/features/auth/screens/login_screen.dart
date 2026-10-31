@@ -187,7 +187,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         label: context.tr('username_or_phone'),
                         hint: context.tr('enter_username'),
                         controller: _identifierController,
-                        prefixIcon: const Icon(Icons.person_outline_rounded, color: AppColors.darkGreen),
+                        prefixIcon: Icons.person_outline_rounded,
                         validator: (val) {
                           if (val == null || val.trim().isEmpty) {
                             return 'कृपया युझरनेम किंवा मोबाईल नंबर टाका';
@@ -203,7 +203,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         hint: context.tr('enter_password'),
                         controller: _passwordController,
                         obscureText: _obscurePassword,
-                        prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.darkGreen),
+                        prefixIcon: Icons.lock_outline_rounded,
                         suffixIcon: IconButton(
                           icon: Icon(
                             _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
@@ -313,3 +313,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+

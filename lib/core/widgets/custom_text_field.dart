@@ -5,7 +5,7 @@ class CustomTextField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
   final String? hint;
-  final IconData? prefixIcon;
+  final dynamic prefixIcon; // Can be IconData or Widget
   final Widget? suffixIcon;
   final TextInputType keyboardType;
   final String? Function(String?)? validator;
@@ -33,6 +33,17 @@ class CustomTextField extends StatelessWidget {
     this.onChanged,
   });
 
+  Widget? _buildPrefix() {
+    if (prefixIcon == null) return null;
+    if (prefixIcon is IconData) {
+      return Icon(prefixIcon as IconData, size: 20);
+    }
+    if (prefixIcon is Widget) {
+      return prefixIcon as Widget;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -58,7 +69,7 @@ class CustomTextField extends StatelessWidget {
           validator: validator,
           decoration: InputDecoration(
             hintText: hint,
-            prefixIcon: prefixIcon != null ? Icon(prefixIcon, size: 20) : null,
+            prefixIcon: _buildPrefix(),
             suffixIcon: suffixIcon,
           ),
         ),
