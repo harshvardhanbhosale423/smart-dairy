@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 import '../../customers/models/customer_model.dart';
+import '../../../core/utils/security_helper.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -21,7 +22,7 @@ class AuthService {
     } catch (_) {}
   }
 
-  /// Login using Username or Mobile Number and Password
+  /// Login using Username or Mobile Number and Password with 5-attempt rate limiting
   Future<UserModel> loginWithUsernameAndPassword({
     required String identifier,
     required String password,
@@ -31,16 +32,22 @@ class AuthService {
     final cleanId = identifier.trim().toLowerCase();
     final cleanPhone = identifier.trim().replaceAll(RegExp(r'\D'), '');
 
+    // 1. Check if identifier/device is locked out
+    final lockout = await SecurityHelper.checkLockout(cleanId);
+    if (lockout.isLocked) {
+      throw 'सुरक्षिततेसाठी हे खाते १५ मिनिटांसाठी लॉक करण्यात आले आहे. कृपया ${lockout.formattedRemainingTime} नंतर पुन्हा प्रयत्न करा.';
+    }
+
     QuerySnapshot<Map<String, dynamic>> snapshot;
 
-    // 1. Try querying by username
+    // 2. Try querying by username
     snapshot = await _firestore
         .collection('users')
         .where('username', isEqualTo: cleanId)
         .limit(1)
         .get();
 
-    // 2. If not found and identifier contains phone digits, search by phone
+    // 3. If not found and identifier contains phone digits, search by phone
     if (snapshot.docs.isEmpty && cleanPhone.isNotEmpty) {
       var phoneQuery = cleanPhone;
       if (phoneQuery.length > 10) {
@@ -54,18 +61,27 @@ class AuthService {
     }
 
     if (snapshot.docs.isEmpty) {
-      throw 'युझरनेम किंवा मोबाईल नंबर सापडला नाही! (User not found)';
+      final remaining = await SecurityHelper.recordFailedAttempt(cleanId);
+      if (remaining == 0) {
+        throw 'तुम्ही ५ वेळा चुकीची माहिती टाकली आहे! सुरक्षिततेसाठी हे खाते १५ मिनिटांसाठी लॉक करण्यात आले आहे.';
+      }
+      throw 'युझरनेम किंवा मोबाईल नंबर सापडला नाही! (शिल्लक प्रयत्न: $remaining/5)';
     }
 
     final userDoc = snapshot.docs.first;
     final user = UserModel.fromMap(userDoc.data(), userDoc.id);
 
-    // Verify Password
-    if (user.password.trim() != password.trim()) {
-      throw 'चुकीचा पासवर्ड! कृपया पुन्हा प्रयत्न करा. (Incorrect password)';
+    // 4. Verify Password (supports SHA-256 and legacy plain text)
+    final isValid = SecurityHelper.verifyPassword(password, user.password);
+    if (!isValid) {
+      final remaining = await SecurityHelper.recordFailedAttempt(cleanId);
+      if (remaining == 0) {
+        throw 'तुम्ही सलग ५ वेळा चुकीचा पासवर्ड टाकला आहे! सुरक्षिततेसाठी हे खाते १५ मिनिटांसाठी लॉक करण्यात आले आहे.';
+      }
+      throw 'चुकीचा पासवर्ड! कृपया पुन्हा प्रयत्न करा. (शिल्लक प्रयत्न: $remaining/5)';
     }
 
-    // Check Approval Status for Customers
+    // 5. Check Approval Status for Customers
     if (user.isCustomer) {
       if (user.isPending) {
         throw 'तुमचे खाते अद्याप डेअरी मालकाकडून मंजूर केलेले नाही. कृपया मालकांशी संपर्क साधा किंवा मंजुरीची वाट पहा.';
@@ -73,6 +89,20 @@ class AuthService {
       if (user.status == 'rejected') {
         throw 'डेअरी मालकांनी तुमचा अर्ज नाकारला आहे.';
       }
+    }
+
+    // 6. Successful login: Reset attempt counter immediately
+    await SecurityHelper.resetAttempts(cleanId);
+
+    // Background upgrade: If password was in plain text, securely upgrade it to SHA-256 hash
+    final hashed = SecurityHelper.hashPassword(password.trim());
+    if (user.password.trim() == password.trim() && user.password != hashed) {
+      try {
+        await _firestore.collection('users').doc(user.uid).update({
+          'password': hashed,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
     }
 
     // Save session in SharedPreferences
@@ -112,11 +142,12 @@ class AuthService {
     }
 
     final uid = _auth.currentUser?.uid ?? 'owner_${DateTime.now().millisecondsSinceEpoch}';
+    final hashedPassword = SecurityHelper.hashPassword(password.trim());
     final user = UserModel(
       uid: uid,
       phone: cleanPhone,
       username: cleanUsername,
-      password: password.trim(),
+      password: hashedPassword,
       role: 'owner',
       status: 'approved',
       name: ownerName.trim(),
@@ -186,7 +217,7 @@ class AuthService {
       uid: uid,
       phone: cleanPhone,
       username: cleanUsername,
-      password: password.trim(),
+      password: SecurityHelper.hashPassword(password.trim()),
       role: 'customer',
       status: 'pending', // Requires Owner approval
       name: name.trim(),
@@ -228,7 +259,7 @@ class AuthService {
       uid: userDocRef.id,
       phone: cleanPhone,
       username: cleanUsername,
-      password: password.trim(),
+      password: SecurityHelper.hashPassword(password.trim()),
       role: 'customer',
       status: 'approved',
       name: customer.name.trim(),

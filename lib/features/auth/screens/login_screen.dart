@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_typography.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/localization/locale_provider.dart';
+import '../../../core/utils/security_helper.dart';
 import '../../../core/widgets/cow_logo.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/widgets/custom_text_field.dart';
@@ -25,18 +27,82 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _obscurePassword = true;
+  LockoutStatus? _lockoutStatus;
+  Timer? _countdownTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkLockout();
+    _identifierController.addListener(_onIdentifierChanged);
+  }
+
+  void _onIdentifierChanged() {
+    final id = _identifierController.text.trim();
+    if (id.length >= 3) {
+      _checkLockout(id);
+    }
+  }
+
+  Future<void> _checkLockout([String? specificId]) async {
+    final id = specificId ?? _identifierController.text.trim();
+    final status = await SecurityHelper.checkLockout(id);
+    if (!mounted) return;
+    setState(() {
+      _lockoutStatus = status;
+    });
+
+    if (status.isLocked) {
+      _startCountdown();
+    } else {
+      _countdownTimer?.cancel();
+    }
+  }
+
+  void _startCountdown() {
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_lockoutStatus != null && _lockoutStatus!.remainingSeconds > 1) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+        setState(() {
+          _lockoutStatus = LockoutStatus(
+            isLocked: true,
+            remainingSeconds: _lockoutStatus!.remainingSeconds - 1,
+            remainingAttempts: 0,
+          );
+        });
+      } else {
+        timer.cancel();
+        _checkLockout();
+      }
+    });
+  }
 
   @override
   void dispose() {
+    _countdownTimer?.cancel();
+    _identifierController.removeListener(_onIdentifierChanged);
     _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   void _onLogin() async {
+    final id = _identifierController.text.trim();
+    await _checkLockout(id);
+    if (_lockoutStatus?.isLocked == true) {
+      _showErrorDialog(
+        'सुरक्षिततेसाठी हे खाते लॉक करण्यात आले आहे. कृपया ${_lockoutStatus!.formattedRemainingTime} नंतर पुन्हा प्रयत्न करा.',
+        isSecurityLock: true,
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
 
-    final id = _identifierController.text.trim();
     final pass = _passwordController.text.trim();
     final authProvider = context.read<AuthProvider>();
 
@@ -61,26 +127,38 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
     } else {
+      await _checkLockout(id);
       final errorMsg = authProvider.errorMessage ?? 'लॉगिन अयशस्वी झाले';
-      _showErrorDialog(errorMsg);
+      _showErrorDialog(errorMsg, isSecurityLock: _lockoutStatus?.isLocked == true);
     }
   }
 
-  void _showErrorDialog(String message) {
+  void _showErrorDialog(String message, {bool isSecurityLock = false}) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
-          children: const [
-            Icon(Icons.info_outline_rounded, color: AppColors.error),
-            SizedBox(width: 8),
-            Text('सूचना (Alert)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          children: [
+            Icon(
+              isSecurityLock ? Icons.shield_rounded : Icons.info_outline_rounded,
+              color: isSecurityLock ? Colors.red : AppColors.error,
+              size: 26,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              isSecurityLock ? 'सुरक्षा लॉक (Security Lock)' : 'सूचना (Alert)',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: isSecurityLock ? Colors.red : AppColors.textDark,
+              ),
+            ),
           ],
         ),
         content: Text(
           message,
-          style: const TextStyle(fontSize: 15, height: 1.4),
+          style: const TextStyle(fontSize: 14, height: 1.4),
         ),
         actions: [
           TextButton(
@@ -218,14 +296,88 @@ class _LoginScreenState extends State<LoginScreen> {
                           return null;
                         },
                       ),
+
+                      // Security Status Banner (5-attempt limit & 15-min lockout)
+                      if (_lockoutStatus != null && _lockoutStatus!.isLocked) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.red.shade400, width: 1.5),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.lock_clock_rounded, color: Colors.red, size: 28),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'सुरक्षा लॉक (५ वेळा चुकीचा पासवर्ड)',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.red,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'पुन्हा प्रयत्न करण्यासाठी शिल्लक वेळ: ${_lockoutStatus!.formattedRemainingTime}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark ? Colors.white70 : Colors.red.shade900,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ] else if (_lockoutStatus != null &&
+                          _lockoutStatus!.remainingAttempts < SecurityHelper.maxAttempts) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.amber.shade700),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.shield_outlined, color: Colors.amber.shade900, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'सुरक्षा मर्यादा: शिल्लक प्रयत्न: ${_lockoutStatus!.remainingAttempts}/${SecurityHelper.maxAttempts}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.amber.shade900,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
                       const SizedBox(height: 24),
 
                       // Submit Button
                       CustomButton(
-                        text: context.tr('login_btn'),
-                        icon: Icons.login_rounded,
+                        text: (_lockoutStatus?.isLocked == true)
+                            ? 'खाते लॉक आहे (${_lockoutStatus!.formattedRemainingTime})'
+                            : context.tr('login_btn'),
+                        icon: (_lockoutStatus?.isLocked == true) ? Icons.lock_rounded : Icons.login_rounded,
+                        backgroundColor: (_lockoutStatus?.isLocked == true) ? Colors.grey : AppColors.darkGreen,
                         isLoading: authProvider.status == AuthStatus.authenticating,
-                        onPressed: _onLogin,
+                        onPressed: (_lockoutStatus?.isLocked == true) ? null : _onLogin,
                       ),
                     ],
                   ),
