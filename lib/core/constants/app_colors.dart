@@ -10,6 +10,8 @@ class AppColors {
   
   // Backgrounds & Surface
   static const Color creamBackground = Color(0xFFFAF7F2); // Soft Milk Cream
+  static const Color lightCream = Color(0xFFFAF7F2);
+  static const Color softCream = Color(0xFFFFFBEB);
   static const Color pureWhite = Color(0xFFFFFFFF);
   static const Color surfaceLight = Color(0xFFF4F0E8);
   static const Color cardBg = Color(0xFFFFFFFF);
@@ -26,6 +28,7 @@ class AppColors {
   static const Color cowBlack = Color(0xFF1F2937);
   static const Color textDark = Color(0xFF111827);
   static const Color textMuted = Color(0xFF6B7280);
+  static const Color secondaryText = Color(0xFF6B7280);
   static const Color textLight = Color(0xFF9CA3AF);
   static const Color dividerColor = Color(0xFFE5E7EB);
 
