@@ -4,9 +4,18 @@ import '../../milk_entry/models/milk_entry_model.dart';
 import '../../payments/models/payment_model.dart';
 import '../../expenses/models/expense_model.dart';
 import '../../customers/models/customer_model.dart';
+import '../../../core/services/local_database_service.dart';
 
 class ReportService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final LocalDatabaseService _localDb = LocalDatabaseService();
+
+  DateTime? _parseDate(dynamic val) {
+    if (val is Timestamp) return val.toDate();
+    if (val is DateTime) return val;
+    if (val is String) return DateTime.tryParse(val);
+    return null;
+  }
 
   /// Generate comprehensive business report for a given date range
   Future<BusinessReportData> generateReport({
@@ -17,17 +26,16 @@ class ReportService {
     final start = DateTime(startDate.year, startDate.month, startDate.day);
     final end = DateTime(endDate.year, endDate.month, endDate.day, 23, 59, 59);
 
-    // 1. Fetch Milk Entries in range
-    final milkSnap = await _firestore
-        .collection('milk_entries')
-        .where('ownerId', isEqualTo: ownerId)
-        .where('date', isGreaterThanOrEqualTo: start)
-        .where('date', isLessThanOrEqualTo: end)
-        .get();
+    // 1. Fetch Milk Entries in range locally
+    final rawMilk = _localDb.query('milk_entries', where: (e) {
+      if (e['ownerId'] != ownerId) return false;
+      final d = _parseDate(e['date']);
+      if (d == null) return false;
+      return d.isAfter(start.subtract(const Duration(seconds: 1))) &&
+          d.isBefore(end.add(const Duration(seconds: 1)));
+    });
 
-    final milkEntries = milkSnap.docs
-        .map((d) => MilkEntryModel.fromMap(d.data(), d.id))
-        .toList();
+    final milkEntries = rawMilk.map((d) => MilkEntryModel.fromMap(d, (d['id'] ?? '').toString())).toList();
 
     double totalMilkLitres = 0.0;
     double billedSales = 0.0;
@@ -54,16 +62,17 @@ class ReportService {
       }
     }
 
-    // 2. Fetch Payments received in range
-    final paymentSnap = await _firestore
-        .collection('payments')
-        .where('ownerId', isEqualTo: ownerId)
-        .where('paymentDate', isGreaterThanOrEqualTo: start)
-        .where('paymentDate', isLessThanOrEqualTo: end)
-        .get();
+    // 2. Fetch Payments received in range locally
+    final rawPayments = _localDb.query('payments', where: (p) {
+      if (p['ownerId'] != ownerId) return false;
+      final d = _parseDate(p['paymentDate']);
+      if (d == null) return false;
+      return d.isAfter(start.subtract(const Duration(seconds: 1))) &&
+          d.isBefore(end.add(const Duration(seconds: 1)));
+    });
 
-    final payments = paymentSnap.docs
-        .map((d) => PaymentModel.fromMap(d.data(), d.id))
+    final payments = rawPayments
+        .map((d) => PaymentModel.fromMap(d, (d['id'] ?? '').toString()))
         .where((p) => p.isPaid)
         .toList();
 
@@ -72,17 +81,16 @@ class ReportService {
       cashCollected += p.amount;
     }
 
-    // 3. Fetch Expenses in range
-    final expenseSnap = await _firestore
-        .collection('expenses')
-        .where('ownerId', isEqualTo: ownerId)
-        .where('expenseDate', isGreaterThanOrEqualTo: start)
-        .where('expenseDate', isLessThanOrEqualTo: end)
-        .get();
+    // 3. Fetch Expenses in range locally
+    final rawExpenses = _localDb.query('expenses', where: (exp) {
+      if (exp['ownerId'] != ownerId) return false;
+      final d = _parseDate(exp['expenseDate']);
+      if (d == null) return false;
+      return d.isAfter(start.subtract(const Duration(seconds: 1))) &&
+          d.isBefore(end.add(const Duration(seconds: 1)));
+    });
 
-    final expenses = expenseSnap.docs
-        .map((d) => ExpenseModel.fromMap(d.data(), d.id))
-        .toList();
+    final expenses = rawExpenses.map((d) => ExpenseModel.fromMap(d, (d['id'] ?? '').toString())).toList();
 
     double totalExpenses = 0.0;
     final Map<String, double> categoryBreakdown = {};
@@ -92,38 +100,30 @@ class ReportService {
       categoryBreakdown[exp.category] = (categoryBreakdown[exp.category] ?? 0.0) + exp.amount;
     }
 
-    // 4. Fetch Customers outstanding dues
-    final custSnap = await _firestore
-        .collection('customers')
-        .where('ownerId', isEqualTo: ownerId)
-        .get();
+    // 4. Fetch Customers outstanding dues locally
+    final rawCustomers = _localDb.query('customers', where: (c) => c['ownerId'] == ownerId);
+    final customers = rawCustomers.map((d) => CustomerModel.fromMap(d, (d['id'] ?? '').toString())).toList();
 
-    double totalOutstanding = 0.0;
-    for (final d in custSnap.docs) {
-      final bal = (d.data()['currentBalance'] ?? 0.0).toDouble();
-      if (bal > 0) totalOutstanding += bal;
+    double totalPendingDues = 0.0;
+    for (final c in customers) {
+      if (c.currentBalance > 0) {
+        totalPendingDues += c.currentBalance;
+      }
     }
 
-    // 5. Profit calculations
-    final netCashProfit = cashCollected - totalExpenses;
-    final netBilledProfit = billedSales - totalExpenses;
-
-    final trendList = trendMap.values.toList();
-    trendList.sort((a, b) => a.date.compareTo(b.date));
+    final sortedTrend = trendMap.values.toList()..sort((a, b) => a.date.compareTo(b.date));
 
     return BusinessReportData(
-      startDate: start,
-      endDate: end,
-      totalMilkDeliveredLitres: totalMilkLitres,
-      billedSalesAmount: billedSales,
-      actualCashCollected: cashCollected,
-      outstandingDues: totalOutstanding,
+      startDate: startDate,
+      endDate: endDate,
+      totalMilkLitres: totalMilkLitres,
+      totalBilledSales: billedSales,
+      totalCashCollected: cashCollected,
       totalExpenses: totalExpenses,
-      netCashProfit: netCashProfit,
-      netBilledProfit: netBilledProfit,
-      categoryWiseExpenses: categoryBreakdown,
-      dailySalesTrend: trendList,
+      netProfitOrLoss: cashCollected - totalExpenses,
+      outstandingDues: totalPendingDues,
+      salesTrend: sortedTrend,
+      expenseCategoryBreakdown: categoryBreakdown,
     );
   }
 }
-

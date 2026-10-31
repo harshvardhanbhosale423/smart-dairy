@@ -1,36 +1,40 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/customer_model.dart';
+import '../../../core/services/local_database_service.dart';
 
 class CustomerRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final LocalDatabaseService _localDb = LocalDatabaseService();
 
   /// Stream of all customers for an owner
   Stream<List<CustomerModel>> getCustomersStream(String ownerId) {
-    return _firestore
-        .collection('customers')
-        .where('ownerId', isEqualTo: ownerId)
-        .snapshots()
-        .map((snapshot) {
-          final list = snapshot.docs
-              .map((doc) => CustomerModel.fromMap(doc.data(), doc.id))
-              .toList();
-          list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-          return list;
-        });
+    return _localDb.stream('customers', where: (c) => c['ownerId'] == ownerId).map((list) {
+      final customers = list.map((doc) => CustomerModel.fromMap(doc, (doc['id'] ?? '').toString())).toList();
+      customers.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      return customers;
+    });
   }
 
   /// Get single customer
   Future<CustomerModel?> getCustomer(String customerId) async {
-    final doc = await _firestore.collection('customers').doc(customerId).get();
-    if (!doc.exists || doc.data() == null) return null;
-    return CustomerModel.fromMap(doc.data()!, doc.id);
+    final doc = _localDb.get('customers', customerId);
+    if (doc != null) {
+      return CustomerModel.fromMap(doc, customerId);
+    }
+    try {
+      final snap = await _firestore.collection('customers').doc(customerId).get();
+      if (!snap.exists || snap.data() == null) return null;
+      final c = CustomerModel.fromMap(snap.data()!, snap.id);
+      await _localDb.set('customers', c.id, snap.data()!);
+      return c;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Add customer with atomic ledger opening balance and app user credentials
   Future<void> addCustomer(CustomerModel customer, {double openingBalance = 0.0}) async {
-    final batch = _firestore.batch();
-    final custRef = _firestore.collection('customers').doc(customer.id);
-
     final cleanUsername = (customer.username != null && customer.username!.isNotEmpty)
         ? customer.username!.trim().toLowerCase()
         : customer.phone.trim();
@@ -48,11 +52,8 @@ class CustomerRepository {
 
     final customerData = customerToSave.toMap();
     customerData['currentBalance'] = openingBalance;
-    batch.set(custRef, customerData);
 
-    // Create or link app user login document
-    final userRef = _firestore.collection('users').doc(userId);
-    batch.set(userRef, {
+    final userData = {
       'uid': userId,
       'phone': customer.phone.trim(),
       'username': cleanUsername,
@@ -65,14 +66,17 @@ class CustomerRepository {
       'morningQuota': customer.morningQuota,
       'eveningQuota': customer.eveningQuota,
       'address': customer.address.trim(),
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+      'createdAt': Timestamp.now(),
+    };
 
-    // If there is an opening balance, create an initial Ledger entry for audit
+    // 1. Save to local offline database
+    await _localDb.set('customers', customer.id, customerData);
+    await _localDb.set('users', userId, userData);
+
     if (openingBalance != 0.0) {
-      final ledgerRef = _firestore.collection('customer_ledgers').doc();
-      batch.set(ledgerRef, {
-        'id': ledgerRef.id,
+      final ledgerId = 'ledger_${DateTime.now().millisecondsSinceEpoch}';
+      await _localDb.set('customer_ledgers', ledgerId, {
+        'id': ledgerId,
         'ownerId': customer.ownerId,
         'customerId': customer.id,
         'customerName': customer.name,
@@ -84,34 +88,29 @@ class CustomerRepository {
         'balanceBefore': 0.0,
         'balanceAfter': openingBalance,
         'notes': 'Initial account opening balance',
-        'transactionDate': FieldValue.serverTimestamp(),
+        'transactionDate': Timestamp.now(),
       });
     }
 
-    // Append to audit log
-    final auditRef = _firestore.collection('audit_logs').doc();
-    batch.set(auditRef, {
-      'id': auditRef.id,
-      'action': 'CUSTOMER_CREATED',
-      'ownerId': customer.ownerId,
-      'customerId': customer.id,
-      'details': 'New customer added with credentials: ${customer.name} ($cleanUsername)',
-      'timestamp': FieldValue.serverTimestamp(),
-    });
-
-    await batch.commit();
+    // 2. Safe background cloud sync
+    try {
+      final batch = _firestore.batch();
+      batch.set(_firestore.collection('customers').doc(customer.id), customerData);
+      batch.set(_firestore.collection('users').doc(userId), userData);
+      await batch.commit();
+    } catch (_) {}
   }
 
   /// Update customer details and user credentials
   Future<void> updateCustomer(CustomerModel customer) async {
-    final batch = _firestore.batch();
-    batch.update(_firestore.collection('customers').doc(customer.id), customer.toMap());
+    final cleanUsername = (customer.username != null && customer.username!.isNotEmpty)
+        ? customer.username!.trim().toLowerCase()
+        : customer.phone.trim();
+
+    // 1. Update locally
+    await _localDb.update('customers', customer.id, customer.toMap());
 
     if (customer.userId != null) {
-      final cleanUsername = (customer.username != null && customer.username!.isNotEmpty)
-          ? customer.username!.trim().toLowerCase()
-          : customer.phone.trim();
-
       final userUpdate = <String, dynamic>{
         'name': customer.name.trim(),
         'phone': customer.phone.trim(),
@@ -119,31 +118,54 @@ class CustomerRepository {
         'morningQuota': customer.morningQuota,
         'eveningQuota': customer.eveningQuota,
         'address': customer.address.trim(),
-        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedAt': Timestamp.now(),
       };
       if (customer.password != null && customer.password!.isNotEmpty) {
         userUpdate['password'] = customer.password!.trim();
       }
-
-      batch.update(_firestore.collection('users').doc(customer.userId), userUpdate);
+      await _localDb.update('users', customer.userId!, userUpdate);
     }
 
-    await batch.commit();
+    // 2. Safe background cloud sync
+    try {
+      final batch = _firestore.batch();
+      batch.update(_firestore.collection('customers').doc(customer.id), customer.toMap());
+      if (customer.userId != null) {
+        batch.update(_firestore.collection('users').doc(customer.userId), {
+          'name': customer.name.trim(),
+          'phone': customer.phone.trim(),
+          'username': cleanUsername,
+          'morningQuota': customer.morningQuota,
+          'eveningQuota': customer.eveningQuota,
+          'address': customer.address.trim(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    } catch (_) {}
   }
 
   /// Change customer status (active, paused, inactive)
   Future<void> updateCustomerStatus(String customerId, String newStatus) async {
-    await _firestore
-        .collection('customers')
-        .doc(customerId)
-        .update({
-          'status': newStatus,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+    await _localDb.update('customers', customerId, {
+      'status': newStatus,
+      'updatedAt': Timestamp.now(),
+    });
+
+    try {
+      await _firestore.collection('customers').doc(customerId).update({
+        'status': newStatus,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
   }
 
   /// Delete customer
   Future<void> deleteCustomer(String customerId, [String? ownerId]) async {
-    await _firestore.collection('customers').doc(customerId).delete();
+    await _localDb.delete('customers', customerId);
+
+    try {
+      await _firestore.collection('customers').doc(customerId).delete();
+    } catch (_) {}
   }
 }

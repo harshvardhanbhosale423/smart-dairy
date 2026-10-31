@@ -6,6 +6,7 @@ import '../../../core/localization/app_localizations.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/widgets/custom_text_field.dart';
+import '../../../core/services/local_database_service.dart';
 import '../../auth/providers/auth_provider.dart';
 
 class DairyProfileScreen extends StatefulWidget {
@@ -43,17 +44,32 @@ class _DairyProfileScreenState extends State<DairyProfileScreen> {
     final user = context.read<AuthProvider>().currentUser;
     if (user == null) return;
 
-    final doc = await FirebaseFirestore.instance.collection('dairy_profiles').doc(user.uid).get();
-    if (doc.exists && doc.data() != null) {
-      final data = doc.data()!;
+    final localData = LocalDatabaseService().get('dairy_profiles', user.uid);
+    if (localData != null) {
       setState(() {
-        _dairyNameController.text = data['dairyName'] ?? '';
-        _ownerNameController.text = data['ownerName'] ?? '';
-        _cowCountController.text = (data['cowCount'] ?? 5).toString();
-        _rateController.text = (data['defaultMilkRate'] ?? 60.0).toString();
-        _addressController.text = data['address'] ?? '';
+        _dairyNameController.text = localData['dairyName'] ?? '';
+        _ownerNameController.text = localData['ownerName'] ?? '';
+        _cowCountController.text = (localData['cowCount'] ?? 5).toString();
+        _rateController.text = (localData['defaultMilkRate'] ?? 60.0).toString();
+        _addressController.text = localData['address'] ?? '';
       });
+      return;
     }
+
+    try {
+      final doc = await FirebaseFirestore.instance.collection('dairy_profiles').doc(user.uid).get();
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        await LocalDatabaseService().set('dairy_profiles', user.uid, data);
+        setState(() {
+          _dairyNameController.text = data['dairyName'] ?? '';
+          _ownerNameController.text = data['ownerName'] ?? '';
+          _cowCountController.text = (data['cowCount'] ?? 5).toString();
+          _rateController.text = (data['defaultMilkRate'] ?? 60.0).toString();
+          _addressController.text = data['address'] ?? '';
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -74,15 +90,26 @@ class _DairyProfileScreenState extends State<DairyProfileScreen> {
 
     setState(() => _isLoading = true);
 
-    await FirebaseFirestore.instance.collection('dairy_profiles').doc(user.uid).set({
+    final profileData = {
       'ownerId': user.uid,
       'dairyName': _dairyNameController.text.trim(),
       'ownerName': _ownerNameController.text.trim(),
       'cowCount': int.tryParse(_cowCountController.text.trim()) ?? 5,
       'defaultMilkRate': double.tryParse(_rateController.text.trim()) ?? 60.0,
       'address': _addressController.text.trim(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+      'updatedAt': Timestamp.now(),
+    };
+
+    // 1. Save locally
+    await LocalDatabaseService().set('dairy_profiles', user.uid, profileData);
+
+    // 2. Safe background cloud sync
+    try {
+      await FirebaseFirestore.instance.collection('dairy_profiles').doc(user.uid).set(
+        profileData,
+        SetOptions(merge: true),
+      );
+    } catch (_) {}
 
     setState(() => _isLoading = false);
 

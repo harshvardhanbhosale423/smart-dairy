@@ -8,6 +8,7 @@ import '../../../core/localization/locale_provider.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
 import '../../../core/widgets/metric_card.dart';
+import '../../../core/services/local_database_service.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../customers/models/customer_model.dart';
 import '../../billing/models/monthly_bill_model.dart';
@@ -45,10 +46,38 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       return;
     }
 
+    final localDb = LocalDatabaseService();
+
+    // 1. Fetch Customer Record locally first (offline-first)
+    final custMap = localDb.get('customers', user.customerId!);
+    if (custMap != null) {
+      _customer = CustomerModel.fromMap(custMap, user.customerId!);
+      final dairyMap = localDb.get('dairy_profiles', _customer!.ownerId);
+      if (dairyMap != null) {
+        _ownerUpiId = dairyMap['ownerUpiId'] ?? '';
+        _dairyName = dairyMap['dairyName'] ?? 'Smart Dairy';
+        _ownerPhone = dairyMap['ownerPhone'] ?? '';
+      }
+
+      final now = DateTime.now();
+      final ym = DateFormatter.toYearMonthKey(now);
+      final bills = localDb.query('monthly_bills', where: (b) => b['customerId'] == _customer!.id && b['yearMonth'] == ym);
+      if (bills.isNotEmpty) {
+        _latestBill = MonthlyBillModel.fromMap(bills.first, (bills.first['id'] ?? '').toString());
+      }
+
+      final entries = localDb.query('milk_entries', where: (e) => e['customerId'] == _customer!.id);
+      if (entries.isNotEmpty) {
+        final sorted = entries.map((d) => MilkEntryModel.fromMap(d, (d['id'] ?? '').toString())).toList();
+        sorted.sort((a, b) => b.date.compareTo(a.date));
+        _lastMilkEntry = sorted.first;
+      }
+    }
+
     final db = FirebaseFirestore.instance;
 
     try {
-      // 1. Fetch Customer Record
+      // 2. Fetch Customer Record from cloud in background
       final custDoc = await db.collection('customers').doc(user.customerId!).get();
       if (custDoc.exists && custDoc.data() != null) {
         _customer = CustomerModel.fromMap(custDoc.data()!, custDoc.id);

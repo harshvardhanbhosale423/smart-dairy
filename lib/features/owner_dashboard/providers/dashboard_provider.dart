@@ -4,9 +4,11 @@ import '../../customers/models/customer_model.dart';
 import '../../milk_entry/models/milk_entry_model.dart';
 import '../../payments/models/payment_model.dart';
 import '../../expenses/models/expense_model.dart';
+import '../../../core/services/local_database_service.dart';
 
 class DashboardProvider extends ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final LocalDatabaseService _localDb = LocalDatabaseService();
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -45,6 +47,13 @@ class DashboardProvider extends ChangeNotifier {
   List<MilkEntryModel> get todayEntries => _todayEntries;
   List<PaymentModel> get recentPayments => _recentPayments;
 
+  DateTime? _parseDate(dynamic val) {
+    if (val is Timestamp) return val.toDate();
+    if (val is DateTime) return val;
+    if (val is String) return DateTime.tryParse(val);
+    return null;
+  }
+
   Future<void> loadDashboardMetrics(String ownerId) async {
     _isLoading = true;
     _errorMessage = null;
@@ -52,95 +61,79 @@ class DashboardProvider extends ChangeNotifier {
 
     try {
       final now = DateTime.now();
-      final startOfToday = DateTime(now.year, now.month, now.day);
-      final endOfToday = DateTime(now.year, now.month, now.day, 23, 59, 59);
-      final startOfMonth = DateTime(now.year, now.month, 1);
-      final endOfMonth = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
 
-      // 1. Customers metrics
-      final custSnap = await _firestore
-          .collection('customers')
-          .where('ownerId', isEqualTo: ownerId)
-          .get();
-
-      _totalCustomers = custSnap.docs.length;
-      _activeCustomers = custSnap.docs.where((d) => d.data()['status'] == 'active').length;
-      _totalPendingDues = custSnap.docs.fold(0.0, (s, d) {
-        final bal = (d.data()['currentBalance'] ?? 0.0).toDouble();
+      // 1. Customers metrics from local DB
+      final custDocs = _localDb.query('customers', where: (c) => c['ownerId'] == ownerId);
+      _totalCustomers = custDocs.length;
+      _activeCustomers = custDocs.where((d) => d['status'] == 'active').length;
+      _totalPendingDues = custDocs.fold(0.0, (s, d) {
+        final bal = (d['currentBalance'] ?? 0.0).toDouble();
         return bal > 0 ? s + bal : s;
       });
 
-      // 2. Today's Milk Distribution
-      final todaySnap = await _firestore
-          .collection('milk_entries')
-          .where('ownerId', isEqualTo: ownerId)
-          .where('date', isGreaterThanOrEqualTo: startOfToday)
-          .where('date', isLessThanOrEqualTo: endOfToday)
-          .get();
+      // 2. Today's Milk Distribution from local DB
+      final todayEntriesList = _localDb.query('milk_entries', where: (e) {
+        if (e['ownerId'] != ownerId) return false;
+        final d = _parseDate(e['date']);
+        if (d == null) return false;
+        return d.year == now.year && d.month == now.month && d.day == now.day;
+      });
 
-      _todayEntries = todaySnap.docs
-          .map((d) => MilkEntryModel.fromMap(d.data(), d.id))
-          .toList();
-
+      _todayEntries = todayEntriesList.map((d) => MilkEntryModel.fromMap(d, (d['id'] ?? '').toString())).toList();
       _todayMorningMilk = _todayEntries.fold(0.0, (s, e) => s + e.morningQty);
       _todayEveningMilk = _todayEntries.fold(0.0, (s, e) => s + e.eveningQty);
       _todayTotalMilk = _todayMorningMilk + _todayEveningMilk;
 
       // 3. This Month's Milk Sales
-      final monthMilkSnap = await _firestore
-          .collection('milk_entries')
-          .where('ownerId', isEqualTo: ownerId)
-          .where('date', isGreaterThanOrEqualTo: startOfMonth)
-          .where('date', isLessThanOrEqualTo: endOfMonth)
-          .get();
+      final monthMilkEntries = _localDb.query('milk_entries', where: (e) {
+        if (e['ownerId'] != ownerId) return false;
+        final d = _parseDate(e['date']);
+        if (d == null) return false;
+        return d.year == now.year && d.month == now.month;
+      });
 
-      _thisMonthSalesLitres = monthMilkSnap.docs.fold(
-          0.0, (s, d) => s + (d.data()['totalQty'] ?? 0.0).toDouble());
-      _thisMonthSalesAmount = monthMilkSnap.docs.fold(
-          0.0, (s, d) => s + (d.data()['totalAmount'] ?? 0.0).toDouble());
+      _thisMonthSalesLitres = monthMilkEntries.fold(0.0, (s, d) => s + (d['totalQty'] ?? 0.0).toDouble());
+      _thisMonthSalesAmount = monthMilkEntries.fold(0.0, (s, d) => s + (d['totalAmount'] ?? 0.0).toDouble());
 
       // 4. This Month's Collection (Payments)
-      final monthPaySnap = await _firestore
-          .collection('payments')
-          .where('ownerId', isEqualTo: ownerId)
-          .where('paymentDate', isGreaterThanOrEqualTo: startOfMonth)
-          .where('paymentDate', isLessThanOrEqualTo: endOfMonth)
-          .get();
+      final monthPayments = _localDb.query('payments', where: (p) {
+        if (p['ownerId'] != ownerId) return false;
+        final d = _parseDate(p['paymentDate']);
+        if (d == null) return false;
+        return d.year == now.year && d.month == now.month;
+      });
 
-      _thisMonthCollection = monthPaySnap.docs.fold(0.0, (s, d) {
-        if (d.data()['status'] == 'PAID') {
-          return s + (d.data()['amount'] ?? 0.0).toDouble();
+      _thisMonthCollection = monthPayments.fold(0.0, (s, d) {
+        if (d['status'] == 'PAID') {
+          return s + (d['amount'] ?? 0.0).toDouble();
         }
         return s;
       });
 
-      // Recent 5 payments
-      _recentPayments = monthPaySnap.docs
-          .map((d) => PaymentModel.fromMap(d.data(), d.id))
-          .take(5)
-          .toList();
+      final allPayments = _localDb.query('payments', where: (p) => p['ownerId'] == ownerId);
+      final sortedPayments = allPayments.map((d) => PaymentModel.fromMap(d, (d['id'] ?? '').toString())).toList();
+      sortedPayments.sort((a, b) => b.paymentDate.compareTo(a.paymentDate));
+      _recentPayments = sortedPayments.take(5).toList();
 
       // 5. This Month's Expenses
-      final monthExpSnap = await _firestore
-          .collection('expenses')
-          .where('ownerId', isEqualTo: ownerId)
-          .where('expenseDate', isGreaterThanOrEqualTo: startOfMonth)
-          .where('expenseDate', isLessThanOrEqualTo: endOfMonth)
-          .get();
+      final monthExpenses = _localDb.query('expenses', where: (e) {
+        if (e['ownerId'] != ownerId) return false;
+        final d = _parseDate(e['expenseDate']);
+        if (d == null) return false;
+        return d.year == now.year && d.month == now.month;
+      });
 
-      _thisMonthExpenses = monthExpSnap.docs.fold(
-          0.0, (s, d) => s + (d.data()['amount'] ?? 0.0).toDouble());
+      _thisMonthExpenses = monthExpenses.fold(0.0, (s, d) => s + (d['amount'] ?? 0.0).toDouble());
 
-      // 6. Monthly Net Profit = Cash Collection - Expenses
+      // 6. Monthly Net Profit
       _monthlyNetProfit = _thisMonthCollection - _thisMonthExpenses;
 
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      _errorMessage = e.toString();
+      debugPrint('Dashboard calculation note: $e');
       _isLoading = false;
       notifyListeners();
     }
   }
 }
-

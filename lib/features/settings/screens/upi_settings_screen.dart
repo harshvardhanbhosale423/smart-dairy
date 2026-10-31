@@ -8,6 +8,7 @@ import '../../../core/services/upi_service.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/widgets/custom_button.dart';
 import '../../../core/widgets/custom_text_field.dart';
+import '../../../core/services/local_database_service.dart';
 import '../../auth/providers/auth_provider.dart';
 
 class UpiSettingsScreen extends StatefulWidget {
@@ -33,14 +34,26 @@ class _UpiSettingsScreenState extends State<UpiSettingsScreen> {
     final user = context.read<AuthProvider>().currentUser;
     if (user == null) return;
 
-    final doc = await FirebaseFirestore.instance.collection('dairy_profiles').doc(user.uid).get();
-    if (doc.exists && doc.data() != null) {
-      final data = doc.data()!;
+    final localData = LocalDatabaseService().get('dairy_profiles', user.uid);
+    if (localData != null) {
       setState(() {
-        _upiIdController.text = data['ownerUpiId'] ?? '';
-        _holderNameController.text = data['accountHolderName'] ?? data['ownerName'] ?? '';
+        _upiIdController.text = localData['ownerUpiId'] ?? '';
+        _holderNameController.text = localData['accountHolderName'] ?? localData['ownerName'] ?? '';
       });
+      return;
     }
+
+    try {
+      final doc = await FirebaseFirestore.instance.collection('dairy_profiles').doc(user.uid).get();
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        await LocalDatabaseService().set('dairy_profiles', user.uid, data);
+        setState(() {
+          _upiIdController.text = data['ownerUpiId'] ?? '';
+          _holderNameController.text = data['accountHolderName'] ?? data['ownerName'] ?? '';
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -58,11 +71,26 @@ class _UpiSettingsScreenState extends State<UpiSettingsScreen> {
 
     setState(() => _isLoading = true);
 
-    await FirebaseFirestore.instance.collection('dairy_profiles').doc(user.uid).set({
+    final upiUpdate = {
       'ownerUpiId': _upiIdController.text.trim(),
       'accountHolderName': _holderNameController.text.trim(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+      'updatedAt': Timestamp.now(),
+    };
+
+    // 1. Save locally
+    await LocalDatabaseService().update('dairy_profiles', user.uid, upiUpdate);
+
+    // 2. Safe cloud sync
+    try {
+      await FirebaseFirestore.instance.collection('dairy_profiles').doc(user.uid).set(
+        {
+          'ownerUpiId': _upiIdController.text.trim(),
+          'accountHolderName': _holderNameController.text.trim(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    } catch (_) {}
 
     setState(() => _isLoading = false);
 

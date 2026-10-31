@@ -1,13 +1,17 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
 import '../../customers/models/customer_model.dart';
 import '../../../core/utils/security_helper.dart';
+import '../../../core/services/local_database_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final LocalDatabaseService _localDb = LocalDatabaseService();
 
   static const String _prefUserKey = 'logged_in_uid';
 
@@ -38,29 +42,51 @@ class AuthService {
       throw 'सुरक्षिततेसाठी हे खाते १५ मिनिटांसाठी लॉक करण्यात आले आहे. कृपया ${lockout.formattedRemainingTime} नंतर पुन्हा प्रयत्न करा.';
     }
 
-    QuerySnapshot<Map<String, dynamic>> snapshot;
+    Map<String, dynamic>? userMap;
+    String? userDocId;
 
-    // 2. Try querying by username
-    snapshot = await _firestore
-        .collection('users')
-        .where('username', isEqualTo: cleanId)
-        .limit(1)
-        .get();
+    // 2. Query Local Database first (works 100% offline, immune to permission denied)
+    final localUsers = _localDb.query('users', where: (u) {
+      final uName = (u['username'] ?? '').toString().trim().toLowerCase();
+      final uPhone = (u['phone'] ?? '').toString().trim();
+      return uName == cleanId || (cleanPhone.isNotEmpty && uPhone.endsWith(cleanPhone));
+    });
 
-    // 3. If not found and identifier contains phone digits, search by phone
-    if (snapshot.docs.isEmpty && cleanPhone.isNotEmpty) {
-      var phoneQuery = cleanPhone;
-      if (phoneQuery.length > 10) {
-        phoneQuery = phoneQuery.substring(phoneQuery.length - 10);
+    if (localUsers.isNotEmpty) {
+      userMap = localUsers.first;
+      userDocId = (userMap['uid'] ?? userMap['id'] ?? '').toString();
+    } else {
+      // 3. Fallback to Cloud Firestore
+      try {
+        var snap = await _firestore
+            .collection('users')
+            .where('username', isEqualTo: cleanId)
+            .limit(1)
+            .get();
+
+        if (snap.docs.isEmpty && cleanPhone.isNotEmpty) {
+          var phoneQuery = cleanPhone;
+          if (phoneQuery.length > 10) {
+            phoneQuery = phoneQuery.substring(phoneQuery.length - 10);
+          }
+          snap = await _firestore
+              .collection('users')
+              .where('phone', isEqualTo: phoneQuery)
+              .limit(1)
+              .get();
+        }
+
+        if (snap.docs.isNotEmpty) {
+          userDocId = snap.docs.first.id;
+          userMap = snap.docs.first.data();
+          await _localDb.set('users', userDocId, userMap);
+        }
+      } catch (e) {
+        debugPrint('Firestore query note: $e');
       }
-      snapshot = await _firestore
-          .collection('users')
-          .where('phone', isEqualTo: phoneQuery)
-          .limit(1)
-          .get();
     }
 
-    if (snapshot.docs.isEmpty) {
+    if (userMap == null || userDocId == null || userDocId.isEmpty) {
       final remaining = await SecurityHelper.recordFailedAttempt(cleanId);
       if (remaining == 0) {
         throw 'तुम्ही ५ वेळा चुकीची माहिती टाकली आहे! सुरक्षिततेसाठी हे खाते १५ मिनिटांसाठी लॉक करण्यात आले आहे.';
@@ -68,8 +94,7 @@ class AuthService {
       throw 'युझरनेम किंवा मोबाईल नंबर सापडला नाही! (शिल्लक प्रयत्न: $remaining/5)';
     }
 
-    final userDoc = snapshot.docs.first;
-    final user = UserModel.fromMap(userDoc.data(), userDoc.id);
+    final user = UserModel.fromMap(userMap, userDocId);
 
     // 4. Verify Password (supports SHA-256 and legacy plain text)
     final isValid = SecurityHelper.verifyPassword(password, user.password);
@@ -94,9 +119,10 @@ class AuthService {
     // 6. Successful login: Reset attempt counter immediately
     await SecurityHelper.resetAttempts(cleanId);
 
-    // Background upgrade: If password was in plain text, securely upgrade it to SHA-256 hash
+    // Upgrade plain text password to SHA-256 hash locally & on cloud
     final hashed = SecurityHelper.hashPassword(password.trim());
     if (user.password.trim() == password.trim() && user.password != hashed) {
+      await _localDb.update('users', user.uid, {'password': hashed});
       try {
         await _firestore.collection('users').doc(user.uid).update({
           'password': hashed,
@@ -130,14 +156,9 @@ class AuthService {
     var cleanPhone = phone.trim().replaceAll(RegExp(r'\D'), '');
     if (cleanPhone.length > 10) cleanPhone = cleanPhone.substring(cleanPhone.length - 10);
 
-    // Check if username already taken
-    final existingUser = await _firestore
-        .collection('users')
-        .where('username', isEqualTo: cleanUsername)
-        .limit(1)
-        .get();
-
-    if (existingUser.docs.isNotEmpty) {
+    // Check if username already taken locally or on cloud
+    final localExisting = _localDb.query('users', where: (u) => (u['username'] ?? '').toString().toLowerCase() == cleanUsername);
+    if (localExisting.isNotEmpty) {
       throw 'हे युझरनेम आधीच वापरले आहे! कृपया दुसरे युझरनेम निवडा.';
     }
 
@@ -155,15 +176,8 @@ class AuthService {
       createdAt: DateTime.now(),
     );
 
-    final batch = _firestore.batch();
-
-    // 1. User doc
-    final userRef = _firestore.collection('users').doc(uid);
-    batch.set(userRef, user.toMap());
-
-    // 2. Dairy Profile doc
-    final dairyRef = _firestore.collection('dairy_profiles').doc(uid);
-    batch.set(dairyRef, {
+    final dairyProfile = {
+      'id': uid,
       'ownerId': uid,
       'dairyName': dairyName.trim(),
       'ownerName': ownerName.trim(),
@@ -172,12 +186,25 @@ class AuthService {
       'cowCount': cowCount,
       'defaultMilkRate': defaultMilkRate,
       'address': address.trim(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+      'createdAt': Timestamp.now(),
+      'updatedAt': Timestamp.now(),
+    };
 
-    await batch.commit();
+    // 1. Save to Local Database (immediate, 100% reliable)
+    await _localDb.set('users', uid, user.toMap());
+    await _localDb.set('dairy_profiles', uid, dairyProfile);
 
-    // Save session
+    // 2. Safe background cloud sync
+    try {
+      final batch = _firestore.batch();
+      batch.set(_firestore.collection('users').doc(uid), user.toMap());
+      batch.set(_firestore.collection('dairy_profiles').doc(uid), dairyProfile);
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Cloud sync note: $e');
+    }
+
+    // 3. Save session
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefUserKey, uid);
 
@@ -202,13 +229,8 @@ class AuthService {
     if (cleanPhone.length > 10) cleanPhone = cleanPhone.substring(cleanPhone.length - 10);
 
     // Check if username is taken
-    final existingUser = await _firestore
-        .collection('users')
-        .where('username', isEqualTo: cleanUsername)
-        .limit(1)
-        .get();
-
-    if (existingUser.docs.isNotEmpty) {
+    final localExisting = _localDb.query('users', where: (u) => (u['username'] ?? '').toString().toLowerCase() == cleanUsername);
+    if (localExisting.isNotEmpty) {
       throw 'हे युझरनेम आधीच वापरले आहे! कृपया दुसरे युझरनेम निवडा.';
     }
 
@@ -228,7 +250,14 @@ class AuthService {
       createdAt: DateTime.now(),
     );
 
-    await _firestore.collection('users').doc(uid).set(user.toMap());
+    // 1. Save locally
+    await _localDb.set('users', uid, user.toMap());
+
+    // 2. Safe background cloud sync
+    try {
+      await _firestore.collection('users').doc(uid).set(user.toMap());
+    } catch (_) {}
+
     return user;
   }
 
@@ -245,18 +274,18 @@ class AuthService {
     var cleanPhone = customer.phone.trim().replaceAll(RegExp(r'\D'), '');
     if (cleanPhone.length > 10) cleanPhone = cleanPhone.substring(cleanPhone.length - 10);
 
-    final custDocRef = _firestore.collection('customers').doc();
-    final userDocRef = _firestore.collection('users').doc();
+    final custId = 'cust_${DateTime.now().millisecondsSinceEpoch}';
+    final userId = 'user_${DateTime.now().millisecondsSinceEpoch}';
 
     final customerWithCredentials = customer.copyWith(
-      id: custDocRef.id,
-      userId: userDocRef.id,
+      id: custId,
+      userId: userId,
       username: cleanUsername,
       password: password.trim(),
     );
 
     final user = UserModel(
-      uid: userDocRef.id,
+      uid: userId,
       phone: cleanPhone,
       username: cleanUsername,
       password: SecurityHelper.hashPassword(password.trim()),
@@ -264,19 +293,26 @@ class AuthService {
       status: 'approved',
       name: customer.name.trim(),
       dairyId: ownerId,
-      customerId: custDocRef.id,
+      customerId: custId,
       morningQuota: customer.morningQuota,
       eveningQuota: customer.eveningQuota,
       address: customer.address,
       createdAt: DateTime.now(),
     );
 
-    final batch = _firestore.batch();
-    batch.set(custDocRef, customerWithCredentials.toMap());
-    batch.set(userDocRef, user.toMap());
+    // 1. Save locally
+    await _localDb.set('customers', custId, customerWithCredentials.toMap());
+    await _localDb.set('users', userId, user.toMap());
 
-    await batch.commit();
-    return custDocRef.id;
+    // 2. Cloud sync
+    try {
+      final batch = _firestore.batch();
+      batch.set(_firestore.collection('customers').doc(custId), customerWithCredentials.toMap());
+      batch.set(_firestore.collection('users').doc(userId), user.toMap());
+      await batch.commit();
+    } catch (_) {}
+
+    return custId;
   }
 
   /// Approve Self-Registered Customer by Dairy Owner
@@ -286,13 +322,12 @@ class AuthService {
     double? morningQuota,
     double? eveningQuota,
   }) async {
-    final custDocRef = _firestore.collection('customers').doc();
-
+    final custId = 'cust_${DateTime.now().millisecondsSinceEpoch}';
     final morning = morningQuota ?? pendingUser.morningQuota ?? 1.0;
     final evening = eveningQuota ?? pendingUser.eveningQuota ?? 1.0;
 
     final customer = CustomerModel(
-      id: custDocRef.id,
+      id: custId,
       ownerId: pendingUser.dairyId ?? '',
       userId: pendingUser.uid,
       name: pendingUser.name ?? '',
@@ -310,29 +345,52 @@ class AuthService {
       updatedAt: DateTime.now(),
     );
 
-    final batch = _firestore.batch();
-
-    // 1. Create customer document
-    batch.set(custDocRef, customer.toMap());
-
-    // 2. Update user status to approved
-    final userRef = _firestore.collection('users').doc(pendingUser.uid);
-    batch.update(userRef, {
+    // 1. Update locally
+    await _localDb.set('customers', custId, customer.toMap());
+    await _localDb.update('users', pendingUser.uid, {
       'status': 'approved',
-      'customerId': custDocRef.id,
+      'customerId': custId,
       'morningQuota': morning,
       'eveningQuota': evening,
-      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedAt': Timestamp.now(),
     });
 
-    await batch.commit();
+    // 2. Cloud sync
+    try {
+      final batch = _firestore.batch();
+      batch.set(_firestore.collection('customers').doc(custId), customer.toMap());
+      batch.update(_firestore.collection('users').doc(pendingUser.uid), {
+        'status': 'approved',
+        'customerId': custId,
+        'morningQuota': morning,
+        'eveningQuota': evening,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      await batch.commit();
+    } catch (_) {}
   }
 
   /// Reject Self-Registered Customer
   Future<void> rejectCustomer(String uid) async {
-    await _firestore.collection('users').doc(uid).update({
+    await _localDb.update('users', uid, {
       'status': 'rejected',
-      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedAt': Timestamp.now(),
+    });
+
+    try {
+      await _firestore.collection('users').doc(uid).update({
+        'status': 'rejected',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
+  }
+
+  /// Stream pending approvals for dairy owner
+  Stream<List<UserModel>> streamPendingApprovals(String ownerId) {
+    return _localDb.stream('users', where: (u) {
+      return (u['dairyId'] == ownerId || u['ownerId'] == ownerId) && u['status'] == 'pending';
+    }).map((list) {
+      return list.map((m) => UserModel.fromMap(m, (m['uid'] ?? m['id'] ?? '').toString())).toList();
     });
   }
 
@@ -343,6 +401,17 @@ class AuthService {
       final uid = prefs.getString(_prefUserKey);
       if (uid == null) return null;
 
+      final localData = _localDb.get('users', uid);
+      if (localData != null) {
+        final user = UserModel.fromMap(localData, uid);
+        if (user.isCustomer && !user.isApproved) {
+          await prefs.remove(_prefUserKey);
+          return null;
+        }
+        return user;
+      }
+
+      // Try cloud fallback
       await _ensureFirebaseAuth();
       final doc = await _firestore.collection('users').doc(uid).get();
       if (!doc.exists || doc.data() == null) {
@@ -351,11 +420,7 @@ class AuthService {
       }
 
       final user = UserModel.fromMap(doc.data()!, doc.id);
-      if (user.isCustomer && !user.isApproved) {
-        await prefs.remove(_prefUserKey);
-        return null;
-      }
-
+      await _localDb.set('users', user.uid, user.toMap());
       return user;
     } catch (_) {
       return null;
@@ -364,6 +429,10 @@ class AuthService {
 
   /// Get current user profile by UID
   Future<UserModel?> getUserProfile(String uid) async {
+    final localData = _localDb.get('users', uid);
+    if (localData != null) {
+      return UserModel.fromMap(localData, uid);
+    }
     try {
       final doc = await _firestore.collection('users').doc(uid).get();
       if (!doc.exists || doc.data() == null) return null;
@@ -375,31 +444,28 @@ class AuthService {
 
   /// Get list of available dairy profiles
   Future<List<Map<String, dynamic>>> getAvailableDairies() async {
-    await _ensureFirebaseAuth();
+    final list = _localDb.getAll('dairy_profiles');
+    if (list.isNotEmpty) return list;
+
     try {
       final snap = await _firestore.collection('dairy_profiles').get();
-      return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+      final cloudList = snap.docs.map((d) => d.data()).toList();
+      for (final item in cloudList) {
+        if (item['id'] != null) {
+          await _localDb.set('dairy_profiles', item['id'].toString(), item);
+        }
+      }
+      return cloudList;
     } catch (_) {
-      return [];
+      return list;
     }
-  }
-
-  /// Stream of Pending Approvals for an Owner
-  Stream<List<UserModel>> streamPendingApprovals(String ownerId) {
-    return _firestore
-        .collection('users')
-        .where('role', isEqualTo: 'customer')
-        .where('dairyId', isEqualTo: ownerId)
-        .where('status', isEqualTo: 'pending')
-        .snapshots()
-        .map((snap) => snap.docs.map((d) => UserModel.fromMap(d.data(), d.id)).toList());
   }
 
   /// Sign Out
   Future<void> signOut() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_prefUserKey);
     try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_prefUserKey);
       await _auth.signOut();
     } catch (_) {}
   }

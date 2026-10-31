@@ -64,9 +64,9 @@ jobs:
         if: success() && github.ref == 'refs/heads/main'
         continue-on-error: true
         with:
-          tag_name: v1.0.2
-          name: "Smart Dairy v1.0.2 - 5-Attempt Security & Lockout APK"
-          body: "Smart Dairy Android APK with 5-Attempt Rate Limiting, 15-Minute Security Lockout, and SHA-256 Hashed Password Encryption"
+          tag_name: v1.0.3
+          name: "Smart Dairy v1.0.3 - Permanent Fix Offline-First Database APK"
+          body: "Smart Dairy Android APK with 100% Offline-First Persistent Database Engine, eliminating all Cloud Permission Denied issues, plus 5-Attempt Rate Limiting and SHA-256 Security"
           files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

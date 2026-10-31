@@ -9,6 +9,7 @@ import 'core/theme/theme_provider.dart';
 import 'core/localization/app_localizations.dart';
 import 'core/localization/locale_provider.dart';
 import 'core/services/notification_service.dart';
+import 'core/services/local_database_service.dart';
 
 import 'features/auth/providers/auth_provider.dart';
 import 'features/auth/screens/login_screen.dart';
@@ -25,6 +26,13 @@ import 'features/customer_dashboard/screens/customer_main_nav_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize offline-first persistent local database
+  try {
+    await LocalDatabaseService().init();
+  } catch (e) {
+    debugPrint('Local DB init note: $e');
+  }
 
   try {
     await Firebase.initializeApp(
