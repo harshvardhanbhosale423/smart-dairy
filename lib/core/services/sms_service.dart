@@ -98,7 +98,7 @@ class SmsService {
         'ग्राहक: ${customer.name}\n'
         'सकाळ: $morningStr | संध्याकाळ: $eveningStr\n'
         'एकूण दूध: $totalStr\n'
-        'दर: ₹${entry.rate.toStringAsFixed(0)}/L | एकूण रक्कम: $amountStr\n'
+        'दर: ₹${entry.ratePerLitre.toStringAsFixed(0)}/L | एकूण रक्कम: $amountStr\n'
         'चालू शिल्लक: $currentBalStr\n\n'
         'धन्यवाद!\n- $cleanDairy';
   }
@@ -148,3 +148,4 @@ class SmsService {
     return opened;
   }
 }
+

@@ -161,13 +161,15 @@ class _DailyMilkEntryScreenState extends State<DailyMilkEntryScreen> {
 
     if (success && mounted) {
       final savedEntry = MilkEntryModel.create(
+        id: 'entry_${DateTime.now().millisecondsSinceEpoch}',
         ownerId: user.uid,
         customerId: _selectedCustomer!.id,
         customerName: _selectedCustomer!.name,
+        customerPhone: _selectedCustomer!.phone,
         date: entryProvider.selectedDate,
         morningQty: morning,
         eveningQty: evening,
-        rate: rate,
+        ratePerLitre: rate,
         isZeroMilk: _isZeroMilk,
         notes: _notesController.text.trim(),
       );

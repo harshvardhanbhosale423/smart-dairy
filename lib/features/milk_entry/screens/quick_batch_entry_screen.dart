@@ -76,13 +76,15 @@ class _QuickBatchEntryScreenState extends State<QuickBatchEntryScreen> {
 
       // Automatic SMS
       final savedEntry = MilkEntryModel.create(
+        id: 'entry_${DateTime.now().millisecondsSinceEpoch}_${c.id}',
         ownerId: user.uid,
         customerId: c.id,
         customerName: c.name,
+        customerPhone: c.phone,
         date: entryProvider.selectedDate,
         morningQty: morning,
         eveningQty: evening,
-        rate: c.milkRate,
+        ratePerLitre: c.milkRate,
         isZeroMilk: isZero,
       );
       SmsService.sendMilkEntrySms(
