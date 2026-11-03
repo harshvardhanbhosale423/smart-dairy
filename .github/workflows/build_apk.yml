@@ -64,9 +64,9 @@ jobs:
         if: success() && github.ref == 'refs/heads/main'
         continue-on-error: true
         with:
-          tag_name: v1.0.4
-          name: "Smart Dairy v1.0.4 - WhatsApp, Direct Calling, Auto SMS & 100% Owner UPI Payments"
-          body: "Smart Dairy Android APK v1.0.4 with WhatsApp launch fix, direct phone dialer calling, automatic customer SMS from owner SIM daily recharge on milk entry, and 100% guaranteed payment routing directly to the dairy owner's verified UPI ID"
+          tag_name: v1.0.5
+          name: "Smart Dairy v1.0.5 - Play Protect Verified Signing & Premium Bill Design"
+          body: "Smart Dairy Android APK v1.0.5 with full Google Play Protect compliance (signed with dedicated production release keystore, zero risky SMS permissions), and executive-grade premium monthly bill design with native Devanagari typography eliminating all black boxes"
           files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

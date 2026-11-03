@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
@@ -10,143 +10,201 @@ import '../../features/billing/models/monthly_bill_model.dart';
 import '../../features/customers/models/customer_model.dart';
 import '../../features/milk_entry/models/milk_entry_model.dart';
 import '../../features/settings/models/dairy_settings_model.dart';
+import 'upi_service.dart';
 
 class PdfService {
-  /// Generate printable PDF Invoice for Monthly Bill
+  /// Generate printable, premium PDF Invoice for Monthly Bill
   static Future<File> generateMonthlyBillPdf({
     required CustomerModel customer,
     required MonthlyBillModel bill,
     required DairySettingsModel dairy,
     required List<MilkEntryModel> monthEntries,
-    bool isMarathi = false,
+    bool isMarathi = true,
   }) async {
-    final pdf = pw.Document();
+    // 1. Load Devanagari Font to ensure Marathi letters never appear as black boxes
+    pw.Font? devanagariFont;
+    pw.Font? devanagariBoldFont;
+    bool hasDevanagari = false;
 
-    final primaryColor = PdfColor.fromHex('14532D'); // Dark Dairy Green
-    final accentGold = PdfColor.fromHex('F59E0B');
-    final surfaceCream = PdfColor.fromHex('FAF7F2');
-    final lightGrey = PdfColor.fromHex('E5E7EB');
+    try {
+      devanagariFont = await PdfGoogleFonts.notoSansDevanagariRegular();
+      devanagariBoldFont = await PdfGoogleFonts.notoSansDevanagariBold();
+      hasDevanagari = true;
+    } catch (e) {
+      debugPrint('PdfService font loading note: $e');
+    }
 
-    // Build UPI URI for QR Code
-    final upiUri = 'upi://pay?pa=${dairy.ownerUpiId}&pn=${dairy.dairyName}&am=${bill.finalPayable.toStringAsFixed(2)}&tn=Bill-${bill.yearMonth}&cu=INR';
+    final theme = hasDevanagari
+        ? pw.ThemeData.withFont(base: devanagariFont, bold: devanagariBoldFont)
+        : pw.ThemeData.withFont(base: pw.Font.helvetica(), bold: pw.Font.helveticaBold());
+
+    final pdf = pw.Document(theme: theme);
+
+    // Premium Color Palette
+    final primaryGreen = PdfColor.fromHex('1B4332'); // Deep Forest Green
+    final accentGold = PdfColor.fromHex('D4AF37');   // Royal Gold
+    final emeraldTint = PdfColor.fromHex('E8F5E9');  // Soft Emerald
+    final borderGrey = PdfColor.fromHex('D1D5DB');   // Clean Silver Grey
+    final textDark = PdfColor.fromHex('1F2937');     // Charcoal
+    final textMuted = PdfColor.fromHex('4B5563');    // Subtle Slate
+    final zebraLight = PdfColor.fromHex('F9FAFB');   // Very Light Grey
+
+    // Currency representation: if font loaded use ₹ else Rs.
+    final curr = hasDevanagari ? '₹' : 'Rs.';
+
+    // UPI QR URI
+    final validUpi = UpiService.isValidUpiId(dairy.ownerUpiId);
+    final upiUri = validUpi
+        ? UpiService.buildUpiUri(
+            upiId: dairy.ownerUpiId,
+            payeeName: dairy.dairyName,
+            amount: bill.finalPayable,
+            transactionNote: 'Bill-${customer.name}-${bill.yearMonth}',
+          )
+        : '';
+
+    // Calculate total delivered in entries
+    final totalLitres = monthEntries.fold<double>(0.0, (sum, e) => sum + e.totalQty);
+    final totalCharges = monthEntries.fold<double>(0.0, (sum, e) => sum + e.totalAmount);
 
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
+        margin: const pw.EdgeInsets.symmetric(horizontal: 28, vertical: 26),
         build: (pw.Context context) {
           return [
-            // Dairy Farm Header
+            // 1. Executive Top Banner
             pw.Container(
-              padding: const pw.EdgeInsets.all(16),
+              padding: const pw.EdgeInsets.all(18),
               decoration: pw.BoxDecoration(
-                color: primaryColor,
+                color: primaryGreen,
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(12)),
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: [
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          dairy.dairyName.trim().isNotEmpty ? dairy.dairyName.trim() : 'SMART DAIRY',
+                          style: pw.TextStyle(
+                            color: PdfColors.white,
+                            fontSize: 20,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
+                        pw.SizedBox(height: 4),
+                        pw.Text(
+                          hasDevanagari
+                              ? 'ताजे, शुद्ध व सकस गायीचे दूध वाटप सेवा 🥛'
+                              : 'Fresh, Pure & Nutritious Cow Milk Delivery',
+                          style: const pw.TextStyle(color: PdfColors.white, fontSize: 10),
+                        ),
+                        pw.SizedBox(height: 4),
+                        pw.Text(
+                          '${hasDevanagari ? "मालक: " : "Owner: "}${dairy.ownerName} | Mo: ${dairy.ownerPhone}',
+                          style: const pw.TextStyle(color: PdfColors.white, fontSize: 10),
+                        ),
+                      ],
+                    ),
+                  ),
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: pw.BoxDecoration(
+                      color: accentGold,
+                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+                    ),
+                    child: pw.Column(
+                      children: [
+                        pw.Text(
+                          hasDevanagari ? 'मासिक दूध बिल' : 'MONTHLY BILL',
+                          style: pw.TextStyle(
+                            fontSize: 11,
+                            fontWeight: pw.FontWeight.bold,
+                            color: textDark,
+                          ),
+                        ),
+                        pw.SizedBox(height: 2),
+                        pw.Text(
+                          hasDevanagari ? bill.monthNameMr : bill.monthNameEn,
+                          style: pw.TextStyle(
+                            fontSize: 14,
+                            fontWeight: pw.FontWeight.bold,
+                            color: textDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            pw.SizedBox(height: 14),
+
+            // 2. Customer & Invoice Info Card (Side-by-Side)
+            pw.Container(
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: borderGrey, width: 1),
                 borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
               ),
               child: pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
+                  // Customer Info
                   pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text(
-                        dairy.dairyName.toUpperCase(),
-                        style: pw.TextStyle(
-                          color: PdfColors.white,
-                          fontSize: 20,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
+                        hasDevanagari ? 'ग्राहक माहिती / Customer Details:' : 'Customer Details:',
+                        style: pw.TextStyle(fontSize: 9, color: textMuted, fontWeight: pw.FontWeight.bold),
                       ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        isMarathi ? 'ताजे व सकस गायीचे दूध' : 'Fresh Cow Milk Distribution',
-                        style: const pw.TextStyle(color: PdfColors.white, fontSize: 11),
-                      ),
-                      pw.Text(
-                        '${dairy.ownerName} | Mo: ${dairy.ownerPhone}',
-                        style: const pw.TextStyle(color: PdfColors.white, fontSize: 11),
-                      ),
-                    ],
-                  ),
-                  pw.Container(
-                    padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: pw.BoxDecoration(
-                      color: accentGold,
-                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
-                    ),
-                    child: pw.Column(
-                      children: [
-                        pw.Text(
-                          isMarathi ? 'मासिक दूध बिल' : 'MONTHLY BILL',
-                          style: pw.TextStyle(
-                            fontSize: 12,
-                            fontWeight: pw.FontWeight.bold,
-                            color: PdfColors.black,
-                          ),
-                        ),
-                        pw.Text(
-                          isMarathi ? bill.monthNameMr : bill.monthNameEn,
-                          style: pw.TextStyle(
-                            fontSize: 14,
-                            fontWeight: pw.FontWeight.bold,
-                            color: PdfColors.black,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                ],
-              ),
-            ),
-
-            pw.SizedBox(height: 16),
-
-            // Customer Info Box
-            pw.Container(
-              padding: const pw.EdgeInsets.all(12),
-              decoration: pw.BoxDecoration(
-                border: pw.Border.all(color: lightGrey),
-                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
-              ),
-              child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        isMarathi ? 'ग्राहक नाव:' : 'Customer Name:',
-                        style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
-                      ),
+                      pw.SizedBox(height: 3),
                       pw.Text(
                         customer.name,
-                        style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                        style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold, color: textDark),
                       ),
-                      pw.SizedBox(height: 4),
+                      pw.SizedBox(height: 2),
                       pw.Text(
-                        '${customer.phone} ${customer.address.isNotEmpty ? "| " + customer.address : ""}',
-                        style: const pw.TextStyle(fontSize: 11),
+                        '${hasDevanagari ? "फोन: " : "Phone: "}${customer.phone}${customer.address.isNotEmpty ? " | " + customer.address : ""}',
+                        style: pw.TextStyle(fontSize: 10, color: textMuted),
                       ),
                     ],
                   ),
+
+                  // Bill Metadata
                   pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
                       pw.Text(
-                        isMarathi ? 'बिल दिनांक:' : 'Bill Date:',
-                        style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+                        '${hasDevanagari ? "बिल क्र: " : "Bill No: "}SD-${bill.yearMonth}-${customer.id.length > 5 ? customer.id.substring(customer.id.length - 5) : customer.id}',
+                        style: pw.TextStyle(fontSize: 9, color: textMuted),
                       ),
+                      pw.SizedBox(height: 2),
                       pw.Text(
-                        DateFormatter.formatShortDate(bill.createdAt),
-                        style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+                        '${hasDevanagari ? "तारीख: " : "Date: "}${DateFormatter.formatShortDate(bill.createdAt)}',
+                        style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
                       ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        'Status: ${bill.status}',
-                        style: pw.TextStyle(
-                          fontSize: 11,
-                          fontWeight: pw.FontWeight.bold,
-                          color: bill.status == 'PAID' ? PdfColors.green800 : PdfColors.red800,
+                      pw.SizedBox(height: 2),
+                      pw.Container(
+                        padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: pw.BoxDecoration(
+                          color: bill.status == 'PAID' ? PdfColor.fromHex('DCFCE7') : PdfColor.fromHex('FEE2E2'),
+                          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+                        ),
+                        child: pw.Text(
+                          bill.status == 'PAID'
+                              ? (hasDevanagari ? 'भरलेले (PAID)' : 'PAID')
+                              : (hasDevanagari ? 'बाकी (UNPAID)' : 'UNPAID'),
+                          style: pw.TextStyle(
+                            fontSize: 9,
+                            fontWeight: pw.FontWeight.bold,
+                            color: bill.status == 'PAID' ? PdfColors.green900 : PdfColors.red900,
+                          ),
                         ),
                       ),
                     ],
@@ -155,122 +213,178 @@ class PdfService {
               ),
             ),
 
-            pw.SizedBox(height: 16),
+            pw.SizedBox(height: 14),
 
-            // Daily Milk Table
+            // 3. Section Title
             pw.Text(
-              isMarathi ? 'दैनिक दूध वाटप नोंद तपशील' : 'Daily Milk Delivery Breakdown',
-              style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
+              hasDevanagari ? 'दैनिक दूध वितरण तपशील' : 'Daily Milk Delivery Breakdown',
+              style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold, color: primaryGreen),
             ),
-            pw.SizedBox(height: 8),
+            pw.SizedBox(height: 6),
 
+            // 4. Premium Milk Delivery Table
             pw.Table(
-              border: pw.TableBorder.all(color: lightGrey, width: 0.5),
+              border: pw.TableBorder.all(color: borderGrey, width: 0.5),
               children: [
+                // Header Row
                 pw.TableRow(
-                  decoration: pw.BoxDecoration(color: surfaceCream),
+                  decoration: pw.BoxDecoration(color: emeraldTint),
                   children: [
-                    _tableHeaderCell(isMarathi ? 'दिनांक' : 'Date'),
-                    _tableHeaderCell(isMarathi ? 'सकाळ (L)' : 'Morn (L)'),
-                    _tableHeaderCell(isMarathi ? 'संध्याकाळ (L)' : 'Eve (L)'),
-                    _tableHeaderCell(isMarathi ? 'एकूण (L)' : 'Total (L)'),
-                    _tableHeaderCell(isMarathi ? 'दर (₹)' : 'Rate (₹)'),
-                    _tableHeaderCell(isMarathi ? 'रक्कम (₹)' : 'Amount (₹)'),
+                    _headerCell(hasDevanagari ? 'दिनांक' : 'Date'),
+                    _headerCell(hasDevanagari ? 'सकाळ (L)' : 'Morn (L)'),
+                    _headerCell(hasDevanagari ? 'संध्याकाळ (L)' : 'Eve (L)'),
+                    _headerCell(hasDevanagari ? 'एकूण दूध (L)' : 'Total (L)'),
+                    _headerCell(hasDevanagari ? 'दर ($curr)' : 'Rate ($curr)'),
+                    _headerCell(hasDevanagari ? 'रक्कम ($curr)' : 'Amount ($curr)'),
                   ],
                 ),
-                ...monthEntries.map((e) => pw.TableRow(
+                // Data Rows with subtle alternating zebra color
+                ...monthEntries.asMap().entries.map((entryItem) {
+                  final idx = entryItem.key;
+                  final e = entryItem.value;
+                  final isEven = idx % 2 == 0;
+                  return pw.TableRow(
+                    decoration: pw.BoxDecoration(color: isEven ? PdfColors.white : zebraLight),
+                    children: [
+                      _dataCell(DateFormatter.formatShortDate(e.date)),
+                      _dataCell(e.morningQty > 0 ? e.morningQty.toStringAsFixed(1) : '-'),
+                      _dataCell(e.eveningQty > 0 ? e.eveningQty.toStringAsFixed(1) : '-'),
+                      _dataCell(e.totalQty.toStringAsFixed(1), isBold: true),
+                      _dataCell(e.ratePerLitre.toStringAsFixed(0)),
+                      _dataCell(e.totalAmount.toStringAsFixed(2), isBold: true),
+                    ],
+                  );
+                }),
+                // Table Total Row
+                pw.TableRow(
+                  decoration: pw.BoxDecoration(color: emeraldTint),
                   children: [
-                    _tableCell(DateFormatter.formatShortDate(e.date)),
-                    _tableCell(e.morningQty.toStringAsFixed(1)),
-                    _tableCell(e.eveningQty.toStringAsFixed(1)),
-                    _tableCell(e.totalQty.toStringAsFixed(1), isBold: true),
-                    _tableCell(e.ratePerLitre.toStringAsFixed(0)),
-                    _tableCell(CurrencyFormatter.formatWithoutSymbol(e.totalAmount)),
+                    _dataCell(hasDevanagari ? 'एकूण' : 'Total', isBold: true),
+                    _dataCell(''),
+                    _dataCell(''),
+                    _dataCell('${totalLitres.toStringAsFixed(1)} L', isBold: true),
+                    _dataCell(''),
+                    _dataCell('$curr ${totalCharges.toStringAsFixed(2)}', isBold: true),
                   ],
-                )),
+                ),
               ],
             ),
 
-            pw.SizedBox(height: 16),
+            pw.SizedBox(height: 14),
 
-            // Financial Summary & UPI QR Code Section
+            // 5. Payment & Financial Summary (Side-by-Side)
             pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                // UPI QR Code
+                // Left: Digital UPI QR Code Card
                 pw.Expanded(
-                  flex: 2,
+                  flex: 5,
                   child: pw.Container(
                     padding: const pw.EdgeInsets.all(12),
                     decoration: pw.BoxDecoration(
-                      border: pw.Border.all(color: lightGrey),
-                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+                      border: pw.Border.all(color: borderGrey, width: 1),
+                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
                     ),
                     child: pw.Column(
                       children: [
                         pw.Text(
-                          isMarathi ? 'QR कोड स्कॅन करून पैसे भरा' : 'Scan QR to Pay via UPI',
-                          style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
-                        ),
-                        pw.SizedBox(height: 8),
-                        pw.BarcodeWidget(
-                          data: upiUri,
-                          barcode: pw.Barcode.qrCode(),
-                          width: 100,
-                          height: 100,
+                          hasDevanagari ? 'ऑनलाइन पेमेंट (UPI QR Code)' : 'Scan & Pay via UPI',
+                          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: primaryGreen),
                         ),
                         pw.SizedBox(height: 6),
-                        pw.Text(
-                          dairy.ownerUpiId,
-                          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
-                        ),
-                        pw.Text(
-                          dairy.dairyName,
-                          style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
-                        ),
+                        if (validUpi && upiUri.isNotEmpty) ...[
+                          pw.BarcodeWidget(
+                            data: upiUri,
+                            barcode: pw.Barcode.qrCode(),
+                            width: 90,
+                            height: 90,
+                          ),
+                          pw.SizedBox(height: 4),
+                          pw.Text(
+                            dairy.ownerUpiId,
+                            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: textDark),
+                          ),
+                          pw.Text(
+                            dairy.dairyName,
+                            style: pw.TextStyle(fontSize: 8, color: textMuted),
+                          ),
+                        ] else ...[
+                          pw.Container(
+                            height: 80,
+                            alignment: pw.Alignment.center,
+                            child: pw.Text(
+                              hasDevanagari ? 'रोख किंवा थेट पेमेंट करा' : 'Cash or Direct Bank Transfer',
+                              style: pw.TextStyle(fontSize: 9, color: textMuted),
+                              textAlign: pw.TextAlign.center,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
                 ),
 
-                pw.SizedBox(width: 16),
+                pw.SizedBox(width: 14),
 
-                // Financial Breakdown Box
+                // Right: Financial Summary Card
                 pw.Expanded(
-                  flex: 3,
+                  flex: 7,
                   child: pw.Container(
                     padding: const pw.EdgeInsets.all(12),
                     decoration: pw.BoxDecoration(
-                      color: surfaceCream,
-                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
-                      border: pw.Border.all(color: lightGrey),
+                      color: zebraLight,
+                      border: pw.Border.all(color: borderGrey, width: 1),
+                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
                     ),
                     child: pw.Column(
                       children: [
-                        _summaryRow(
-                          isMarathi ? 'एकूण दूध प्रमाण:' : 'Total Milk Delivered:',
+                        _statementRow(
+                          hasDevanagari ? 'एकूण दूध प्रमाण:' : 'Total Milk Delivered:',
                           '${bill.totalMilkLitres.toStringAsFixed(1)} Litres',
                         ),
-                        pw.Divider(color: lightGrey),
-                        _summaryRow(
-                          isMarathi ? 'चालू महिन्याचे भाडे:' : 'Current Month Milk Charges:',
-                          CurrencyFormatter.format(bill.currentMonthMilkCharges),
+                        pw.Divider(color: borderGrey, thickness: 0.5),
+                        _statementRow(
+                          hasDevanagari ? 'चालू महिन्याचे भाडे:' : 'Current Milk Charges:',
+                          '$curr ${bill.currentMonthMilkCharges.toStringAsFixed(2)}',
                         ),
-                        _summaryRow(
-                          isMarathi ? 'मागील येणे बाकी:' : 'Previous Outstanding:',
-                          CurrencyFormatter.format(bill.previousBalance),
+                        _statementRow(
+                          hasDevanagari ? 'मागील येणे बाकी (+):' : 'Previous Dues (+):',
+                          '$curr ${bill.previousBalance.toStringAsFixed(2)}',
                         ),
-                        _summaryRow(
-                          isMarathi ? 'जमा झालेली रक्कम (-):' : 'Payments Deducted (-):',
-                          CurrencyFormatter.format(bill.paidAmount),
-                          color: PdfColors.green800,
+                        _statementRow(
+                          hasDevanagari ? 'जमा झालेली रक्कम (-):' : 'Payments Received (-):',
+                          '- $curr ${bill.paidAmount.toStringAsFixed(2)}',
+                          valueColor: PdfColors.green800,
                         ),
-                        pw.Divider(thickness: 1.5, color: primaryColor),
-                        _summaryRow(
-                          isMarathi ? 'एकूण भरावयाची रक्कम:' : 'Total Payable Amount:',
-                          CurrencyFormatter.format(bill.finalPayable),
-                          isTotal: true,
-                          color: primaryColor,
+                        pw.SizedBox(height: 6),
+                        // Highlighted Final Total Box
+                        pw.Container(
+                          padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: pw.BoxDecoration(
+                            color: primaryGreen,
+                            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                          ),
+                          child: pw.Row(
+                            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                            children: [
+                              pw.Text(
+                                hasDevanagari ? 'एकूण भरावयाची रक्कम:' : 'Total Payable Amount:',
+                                style: pw.TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: PdfColors.white,
+                                ),
+                              ),
+                              pw.Text(
+                                '$curr ${bill.finalPayable.toStringAsFixed(2)}',
+                                style: pw.TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: accentGold,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -279,38 +393,42 @@ class PdfService {
               ],
             ),
 
-            pw.SizedBox(height: 24),
+            pw.SizedBox(height: 20),
 
-            // Footer & Signatures
+            // 6. Footer & Signature
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text(
-                      isMarathi ? 'धन्यवाद! पुन्हा सेवेची संधी द्या.' : 'Thank you for choosing Smart Dairy!',
-                      style: pw.TextStyle(fontSize: 10, fontStyle: pw.FontStyle.italic),
+                      hasDevanagari
+                          ? 'धन्यवाद! शुद्ध दूध, निरोगी आयुष्य.'
+                          : 'Thank you! Pure Milk for Healthy Life.',
+                      style: pw.TextStyle(fontSize: 9, fontStyle: pw.FontStyle.italic, color: primaryGreen),
                     ),
+                    pw.SizedBox(height: 2),
                     pw.Text(
-                      'Generated securely via Smart Dairy App',
-                      style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+                      'Smart Dairy App द्वारे तयार केलेले अधिकृत संगणकीकृत बिल',
+                      style: pw.TextStyle(fontSize: 7, color: textMuted),
                     ),
                   ],
                 ),
                 pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
                     pw.Container(
-                      width: 120,
+                      width: 130,
                       decoration: const pw.BoxDecoration(
-                        border: pw.Border(top: pw.BorderSide(color: PdfColors.grey600, width: 1)),
+                        border: pw.Border(top: pw.BorderSide(color: PdfColors.black, width: 1)),
                       ),
                       padding: const pw.EdgeInsets.only(top: 4),
                       child: pw.Center(
                         child: pw.Text(
-                          isMarathi ? 'डेअरी मालकाची स्वाक्षरी' : 'Authorized Signature',
-                          style: const pw.TextStyle(fontSize: 10),
+                          hasDevanagari ? 'डेअरी मालकाची सही' : 'Authorized Signature',
+                          style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: textDark),
                         ),
                       ),
                     ),
@@ -324,57 +442,58 @@ class PdfService {
     );
 
     final outputDir = await getTemporaryDirectory();
-    final file = File('${outputDir.path}/Bill_${customer.name}_${bill.yearMonth}.pdf');
+    final cleanCustName = customer.name.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+    final file = File('${outputDir.path}/Bill_${cleanCustName}_${bill.yearMonth}.pdf');
     await file.writeAsBytes(await pdf.save());
     return file;
   }
 
-  static pw.Widget _tableHeaderCell(String text) {
+  static pw.Widget _headerCell(String text) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 6),
       child: pw.Center(
         child: pw.Text(
           text,
-          style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+          style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.black),
+          textAlign: pw.TextAlign.center,
         ),
       ),
     );
   }
 
-  static pw.Widget _tableCell(String text, {bool isBold = false}) {
+  static pw.Widget _dataCell(String text, {bool isBold = false}) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 5),
       child: pw.Center(
         child: pw.Text(
           text,
           style: pw.TextStyle(
-            fontSize: 9,
+            fontSize: 8.5,
             fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal,
+            color: PdfColors.black,
           ),
+          textAlign: pw.TextAlign.center,
         ),
       ),
     );
   }
 
-  static pw.Widget _summaryRow(String label, String value, {bool isTotal = false, PdfColor? color}) {
+  static pw.Widget _statementRow(String label, String value, {PdfColor? valueColor}) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 3),
+      padding: const pw.EdgeInsets.symmetric(vertical: 2.5),
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
           pw.Text(
             label,
-            style: pw.TextStyle(
-              fontSize: isTotal ? 12 : 10,
-              fontWeight: isTotal ? pw.FontWeight.bold : pw.FontWeight.normal,
-            ),
+            style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.black),
           ),
           pw.Text(
             value,
             style: pw.TextStyle(
-              fontSize: isTotal ? 14 : 10,
-              fontWeight: isTotal ? pw.FontWeight.bold : pw.FontWeight.bold,
-              color: color ?? PdfColors.black,
+              fontSize: 9,
+              fontWeight: pw.FontWeight.bold,
+              color: valueColor ?? PdfColors.black,
             ),
           ),
         ],
@@ -382,4 +501,3 @@ class PdfService {
     );
   }
 }
-

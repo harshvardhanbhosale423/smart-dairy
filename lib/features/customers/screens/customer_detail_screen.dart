@@ -257,7 +257,7 @@ class CustomerDetailScreen extends StatelessWidget {
                       onPressed: () {
                         final u = currentCustomer.username ?? currentCustomer.phone;
                         final p = currentCustomer.password ?? '123456';
-                        final msg = 'नमस्कार ${currentCustomer.name},\nस्मार्ट डेअरी ॲपमध्ये आपले स्वागत आहे! 🥛\n\nआपले लॉगिन तपशील:\nयुझरनेम: $u\nपासवर्ड: $p\n\nॲप डाऊनलोड करा:\nhttps://github.com/harshvardhanbhosale423/smart-dairy/releases/download/v1.0.4/app-release.apk';
+                        final msg = 'नमस्कार ${currentCustomer.name},\nस्मार्ट डेअरी ॲपमध्ये आपले स्वागत आहे! 🥛\n\nआपले लॉगिन तपशील:\nयुझरनेम: $u\nपासवर्ड: $p\n\nॲप डाऊनलोड करा:\nhttps://github.com/harshvardhanbhosale423/smart-dairy/releases/download/v1.0.5/app-release.apk';
                         AppLauncher.openWhatsApp(
                           context: context,
                           phone: currentCustomer.phone,
