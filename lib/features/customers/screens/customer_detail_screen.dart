@@ -15,6 +15,9 @@ import '../../milk_entry/models/milk_entry_model.dart';
 import '../../milk_entry/screens/daily_milk_entry_screen.dart';
 import '../../payments/screens/record_payment_screen.dart';
 import '../../../core/services/app_launcher.dart';
+import '../../../core/services/local_database_service.dart';
+import '../../../core/services/whatsapp_service.dart';
+import '../../auth/providers/auth_provider.dart';
 
 class CustomerDetailScreen extends StatelessWidget {
   final CustomerModel customer;
@@ -25,8 +28,48 @@ class CustomerDetailScreen extends StatelessWidget {
     await AppLauncher.makePhoneCall(context, phone);
   }
 
-  void _whatsapp(BuildContext context, String phone) async {
-    await AppLauncher.openWhatsApp(context: context, phone: phone);
+  void _whatsapp(BuildContext context, CustomerModel customer) async {
+    final user = context.read<AuthProvider>().currentUser;
+    final localDb = LocalDatabaseService();
+    final profile = user != null ? localDb.get('dairy_profiles', user.uid) : null;
+    final dairyName = (profile?['dairyName'] ?? user?.name ?? 'Smart Dairy').toString();
+    final ownerUpi = (profile?['ownerUpiId'] ?? '').toString();
+    final ownerPhone = (profile?['dairyPhone'] ?? user?.phone ?? '').toString();
+
+    final message = WhatsAppService.formatCustomerStatementMessage(
+      customer: customer,
+      dairyName: dairyName,
+      ownerPhone: ownerPhone,
+      ownerUpiId: ownerUpi,
+    );
+
+    await AppLauncher.openWhatsApp(
+      context: context,
+      phone: customer.phone,
+      message: message,
+    );
+  }
+
+  void _deleteCustomer(BuildContext context, CustomerModel customer) async {
+    final confirm = await ConfirmationDialog.show(
+      context,
+      title: 'ग्राहक हटवायचा आहे का? (Delete Customer?)',
+      message: 'तुम्हाला खात्री आहे का? तुम्ही \'${customer.name}\' या ग्राहकाचे खाते व नोंदी कायमच्या हटवू इच्छिता का?\n\nही क्रिया पूर्ववत करता येणार नाही.',
+      confirmText: 'होय, ग्राहक हटवा',
+    );
+
+    if (confirm == true && context.mounted) {
+      await context.read<CustomerProvider>().deleteCustomer(customer);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${customer.name} ग्राहक यशस्वीरित्या हटवला! 🗑️'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    }
   }
 
   @override
@@ -54,6 +97,11 @@ class CustomerDetailScreen extends StatelessWidget {
                 MaterialPageRoute(builder: (_) => AddEditCustomerScreen(customer: currentCustomer)),
               );
             },
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+            tooltip: 'ग्राहक हटवा (Delete)',
+            onPressed: () => _deleteCustomer(context, currentCustomer),
           ),
         ],
       ),
@@ -172,7 +220,7 @@ class CustomerDetailScreen extends StatelessWidget {
                         ),
                         IconButton(
                           icon: const Icon(Icons.chat, color: AppColors.lightGreen, size: 18),
-                          onPressed: () => _whatsapp(context, currentCustomer.phone),
+                          onPressed: () => _whatsapp(context, currentCustomer),
                         ),
                       ],
                     ),
@@ -257,7 +305,7 @@ class CustomerDetailScreen extends StatelessWidget {
                       onPressed: () {
                         final u = currentCustomer.username ?? currentCustomer.phone;
                         final p = currentCustomer.password ?? '123456';
-                        final msg = 'नमस्कार ${currentCustomer.name},\nस्मार्ट डेअरी ॲपमध्ये आपले स्वागत आहे! 🥛\n\nआपले लॉगिन तपशील:\nयुझरनेम: $u\nपासवर्ड: $p\n\nॲप डाऊनलोड करा:\nhttps://github.com/harshvardhanbhosale423/smart-dairy/releases/download/v1.0.5/app-release.apk';
+                        final msg = 'नमस्कार ${currentCustomer.name},\nस्मार्ट डेअरी ॲपमध्ये आपले स्वागत आहे! 🥛\n\nआपले लॉगिन तपशील:\nयुझरनेम: $u\nपासवर्ड: $p\n\nॲप डाऊनलोड करा:\nhttps://github.com/harshvardhanbhosale423/smart-dairy/releases/download/v1.0.6/app-release.apk';
                         AppLauncher.openWhatsApp(
                           context: context,
                           phone: currentCustomer.phone,
@@ -309,6 +357,23 @@ class CustomerDetailScreen extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _deleteCustomer(context, currentCustomer),
+                icon: const Icon(Icons.delete_forever_rounded, color: AppColors.error, size: 18),
+                label: const Text(
+                  'ग्राहक कायमचा हटवा (Delete Customer)',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.error),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.error),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
 
             const SizedBox(height: 24),
 
@@ -332,6 +397,23 @@ class CustomerDetailScreen extends StatelessWidget {
                   child: const Text('Add Entry'),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _deleteCustomer(context, currentCustomer),
+                icon: const Icon(Icons.delete_forever_rounded, color: AppColors.error, size: 18),
+                label: const Text(
+                  'ग्राहक कायमचा हटवा (Delete Customer)',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.error),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.error),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
             ),
             const SizedBox(height: 8),
 

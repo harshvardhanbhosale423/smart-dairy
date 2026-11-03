@@ -7,6 +7,8 @@ import '../../../core/utils/currency_formatter.dart';
 import '../../../core/widgets/confirmation_dialog.dart';
 import '../../../core/widgets/empty_state_widget.dart';
 import '../../../core/services/app_launcher.dart';
+import '../../../core/services/local_database_service.dart';
+import '../../../core/services/whatsapp_service.dart';
 import '../models/customer_model.dart';
 import '../providers/customer_provider.dart';
 import '../../auth/models/user_model.dart';
@@ -45,8 +47,47 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     await AppLauncher.makePhoneCall(context, phone);
   }
 
-  void _whatsappCustomer(String phone) async {
-    await AppLauncher.openWhatsApp(context: context, phone: phone);
+  void _whatsappCustomer(CustomerModel customer) async {
+    final user = context.read<AuthProvider>().currentUser;
+    final localDb = LocalDatabaseService();
+    final profile = user != null ? localDb.get('dairy_profiles', user.uid) : null;
+    final dairyName = (profile?['dairyName'] ?? user?.name ?? 'Smart Dairy').toString();
+    final ownerUpi = (profile?['ownerUpiId'] ?? '').toString();
+    final ownerPhone = (profile?['dairyPhone'] ?? user?.phone ?? '').toString();
+
+    final message = WhatsAppService.formatCustomerStatementMessage(
+      customer: customer,
+      dairyName: dairyName,
+      ownerPhone: ownerPhone,
+      ownerUpiId: ownerUpi,
+    );
+
+    await AppLauncher.openWhatsApp(
+      context: context,
+      phone: customer.phone,
+      message: message,
+    );
+  }
+
+  void _deleteCustomer(CustomerModel customer) async {
+    final confirm = await ConfirmationDialog.show(
+      context,
+      title: 'ग्राहक हटवायचा आहे का? (Delete Customer?)',
+      message: 'तुम्हाला खात्री आहे का? तुम्ही \'${customer.name}\' या ग्राहकाचे खाते व सर्व नोंदी कायमच्या हटवू इच्छिता का?\n\nही क्रिया पूर्ववत करता येणार नाही.',
+      confirmText: 'होय, ग्राहक हटवा',
+    );
+
+    if (confirm == true && mounted) {
+      await context.read<CustomerProvider>().deleteCustomer(customer);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${customer.name} ग्राहक यशस्वीरित्या हटवला! 🗑️'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    }
   }
 
   void _showApproveDialog(UserModel user) {
@@ -563,15 +604,25 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.call_rounded, size: 18, color: AppColors.darkGreen),
+                    icon: const Icon(Icons.call_rounded, size: 20, color: AppColors.darkGreen),
+                    tooltip: 'कॉल करा (Call)',
                     onPressed: () => _callCustomer(customer.phone),
                     constraints: const BoxConstraints(),
                     padding: const EdgeInsets.all(6),
                   ),
                   const SizedBox(width: 8),
                   IconButton(
-                    icon: const Icon(Icons.chat_bubble_rounded, size: 18, color: AppColors.lightGreen),
-                    onPressed: () => _whatsappCustomer(customer.phone),
+                    icon: const Icon(Icons.chat_bubble_rounded, size: 20, color: AppColors.lightGreen),
+                    tooltip: 'WhatsApp वर हिशोब पाठवा (Send Statement)',
+                    onPressed: () => _whatsappCustomer(customer),
+                    constraints: const BoxConstraints(),
+                    padding: const EdgeInsets.all(6),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Colors.redAccent),
+                    tooltip: 'ग्राहक हटवा (Delete)',
+                    onPressed: () => _deleteCustomer(customer),
                     constraints: const BoxConstraints(),
                     padding: const EdgeInsets.all(6),
                   ),

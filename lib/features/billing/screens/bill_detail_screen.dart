@@ -40,11 +40,17 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
   }
 
   Future<void> _loadEntries() async {
-    final entries = await MilkEntryRepository().getCustomerEntriesForMonth(
-      customerId: widget.bill.customerId,
-      year: widget.bill.year,
-      month: widget.bill.month,
-    );
+    List<MilkEntryModel> entries;
+    if (widget.bill.month > 0) {
+      entries = await MilkEntryRepository().getCustomerEntriesForMonth(
+        customerId: widget.bill.customerId,
+        year: widget.bill.year,
+        month: widget.bill.month,
+      );
+    } else {
+      // Multi-month bill: fetch customer entries
+      entries = await MilkEntryRepository().getEntriesForCustomer(widget.bill.customerId, limit: 500).first;
+    }
     if (mounted) {
       setState(() {
         _monthEntries = entries;

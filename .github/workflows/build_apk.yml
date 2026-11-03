@@ -64,9 +64,14 @@ jobs:
         if: success() && github.ref == 'refs/heads/main'
         continue-on-error: true
         with:
-          tag_name: v1.0.5
-          name: "Smart Dairy v1.0.5 - Play Protect Verified Signing & Premium Bill Design"
-          body: "Smart Dairy Android APK v1.0.5 with full Google Play Protect compliance (signed with dedicated production release keystore, zero risky SMS permissions), and executive-grade premium monthly bill design with native Devanagari typography eliminating all black boxes"
+          tag_name: v1.0.6
+          name: "Smart Dairy v1.0.6 - Multi-Month Custom Billing, Customer Delete & WhatsApp Pre-printed Summary"
+          body: |
+            Smart Dairy Android APK v1.0.6 release with 4 major updates:
+            1. Separate monthly calculation breakdown and multi-month custom bill generator
+            2. Customer Delete button with confirmation safety dialog in both list and detail screens
+            3. Removed automatic all-bills generation in favor of manual pending months selection
+            4. Pre-printed Marathi WhatsApp message with balance due, quota, rate, and dairy details
           files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

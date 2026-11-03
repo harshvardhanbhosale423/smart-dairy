@@ -87,6 +87,44 @@ Thank you for choosing *${dairyName.trim()}*! 🙏
 ''';
   }
 
+  /// Generate customer balance & account statement message in Marathi for Customer List / Detail
+  static String formatCustomerStatementMessage({
+    required CustomerModel customer,
+    required String dairyName,
+    String? ownerPhone,
+    String? ownerUpiId,
+  }) {
+    final hasDue = customer.currentBalance > 0;
+    final isAdvance = customer.currentBalance < 0;
+    final balanceText = hasDue
+        ? '🔺 *एकूण बाकी येणे रक्कम (Due):* ${CurrencyFormatter.format(customer.currentBalance)}'
+        : (isAdvance
+            ? '🟢 *जमा आगाऊ रक्कम (Advance):* ${CurrencyFormatter.format(customer.currentBalance.abs())}'
+            : '✅ *बाकी येणे रक्कम:* निरंक (₹0.00)');
+
+    final upiSection = (ownerUpiId != null && ownerUpiId.trim().isNotEmpty)
+        ? '\n📲 *ऑनलाइन पेमेंटसाठी UPI ID:* `${ownerUpiId.trim()}`'
+        : '';
+    final phoneSection = (ownerPhone != null && ownerPhone.trim().isNotEmpty)
+        ? '\n📞 *डेअरी संपर्क क्रमांक:* $ownerPhone'
+        : '';
+
+    return '''
+🐄 *${dairyName.trim()}* 🥛
+----------------------------------------
+नमस्कार *${customer.name.trim()}जी!*
+
+आपल्या दुधाच्या खात्याचा सद्यस्थिती हिशोब खालीलप्रमाणे आहे:
+
+$balanceText
+🥛 *दैनिक दूध प्रमाण:* सकाळ ${customer.morningQuota}L | संध्याकाळ ${customer.eveningQuota}L
+💰 *सध्याचा दूध दर:* ₹${customer.milkRate.toStringAsFixed(0)} प्रति लिटर$upiSection$phoneSection
+
+काही अडचण किंवा शंका असल्यास त्वरित संपर्क साधावा.
+धन्यवाद! - *${dairyName.trim()}* 🙏
+''';
+  }
+
   /// Share message directly via WhatsApp deep link with fallback
   static Future<bool> sendWhatsAppMessage({
     required String phone,

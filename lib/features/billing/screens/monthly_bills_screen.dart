@@ -5,12 +5,14 @@ import '../../../core/localization/app_localizations.dart';
 import '../../../core/localization/locale_provider.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatter.dart';
+import '../../../core/widgets/confirmation_dialog.dart';
 import '../../../core/widgets/empty_state_widget.dart';
 import '../models/monthly_bill_model.dart';
 import '../providers/billing_provider.dart';
-import '../../customers/providers/customer_provider.dart';
+import '../repositories/billing_repository.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'bill_detail_screen.dart';
+import 'create_custom_bill_screen.dart';
 
 class MonthlyBillsScreen extends StatefulWidget {
   const MonthlyBillsScreen({super.key});
@@ -48,28 +50,32 @@ class _MonthlyBillsScreenState extends State<MonthlyBillsScreen> {
     billing.setMonth(year, month, user.uid);
   }
 
-  void _onGenerateAllBills() async {
-    final user = context.read<AuthProvider>().currentUser;
-    if (user == null) return;
+  void _openCreateBill([dynamic preCustomer]) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CreateCustomBillScreen(preSelectedCustomer: preCustomer),
+      ),
+    );
+  }
 
-    final customers = context.read<CustomerProvider>().allCustomers;
-    if (customers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No customers found to generate bills'), backgroundColor: AppColors.error),
-      );
-      return;
-    }
+  void _deleteBill(MonthlyBillModel bill) async {
+    final confirm = await ConfirmationDialog.show(
+      context,
+      title: 'बिल हटवायचे आहे का?',
+      message: '${bill.customerName} यांचे "${bill.yearMonth}" चे हे बिल हटवायचे आहे का?',
+      confirmText: 'होय, हटवा',
+    );
 
-    final billing = context.read<BillingProvider>();
-    final count = await billing.generateAllBills(ownerId: user.uid, customers: customers);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$count ग्राहकांची मासिक बिले यशस्वीरित्या तयार झाली! / Generated $count bills!'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+    if (confirm == true) {
+      await BillingRepository().deleteBill(bill.id);
+      final user = context.read<AuthProvider>().currentUser;
+      if (user != null && mounted) {
+        context.read<BillingProvider>().listenToOwnerBills(user.uid);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('बिल यशस्वीरित्या हटवले!'), backgroundColor: AppColors.success),
+        );
+      }
     }
   }
 
@@ -86,15 +92,22 @@ class _MonthlyBillsScreenState extends State<MonthlyBillsScreen> {
       appBar: AppBar(
         title: Text(context.tr('monthly_bills')),
         actions: [
-          TextButton.icon(
-            onPressed: billing.isLoading ? null : _onGenerateAllBills,
-            icon: const Icon(Icons.auto_mode_rounded, size: 18, color: AppColors.pureWhite),
-            label: Text(
-              context.tr('generate_all_bills'),
-              style: const TextStyle(color: AppColors.pureWhite, fontWeight: FontWeight.bold, fontSize: 12),
-            ),
+          IconButton(
+            icon: const Icon(Icons.add_chart_rounded, size: 24),
+            tooltip: 'महिने निवडून बिल बनवा',
+            onPressed: () => _openCreateBill(),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: AppColors.darkGreen,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.receipt_long_rounded),
+        label: const Text(
+          'महिने निवडून बिल बनवा',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        onPressed: () => _openCreateBill(),
       ),
       body: Column(
         children: [
@@ -161,14 +174,14 @@ class _MonthlyBillsScreenState extends State<MonthlyBillsScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : bills.isEmpty
                     ? EmptyStateWidget(
-                        title: 'No Bills For This Month',
-                        message: 'या महिन्यासाठी अद्याप बिले बनवली नाहीत.\nवरील "सर्व बिले स्वयंचलित बनवा" बटनावर टॅप करा.',
-                        buttonText: context.tr('generate_all_bills'),
-                        onButtonPressed: _onGenerateAllBills,
+                        title: 'या महिन्यासाठी बिल उपलब्ध नाही',
+                        message: 'ग्राहकांचे महिने निवडून अचूक व पारदर्शक बिल तयार करण्यासाठी खालील बटनावर टॅप करा.',
+                        buttonText: 'महिने निवडून बिल बनवा',
+                        onButtonPressed: () => _openCreateBill(),
                         icon: Icons.receipt_long_rounded,
                       )
                     : ListView.builder(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
                         itemCount: bills.length,
                         itemBuilder: (ctx, index) {
                           final bill = bills[index];
@@ -196,9 +209,10 @@ class _MonthlyBillsScreenState extends State<MonthlyBillsScreen> {
     }
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         onTap: () {
           Navigator.push(
             context,
@@ -229,25 +243,27 @@ class _MonthlyBillsScreenState extends State<MonthlyBillsScreen> {
                       style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusFg),
                     ),
                   ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline_rounded, size: 20, color: AppColors.textMuted),
+                    tooltip: 'बिल हटवा',
+                    onPressed: () => _deleteBill(bill),
+                    constraints: const BoxConstraints(),
+                    padding: const EdgeInsets.only(left: 8),
+                  ),
                 ],
               ),
               const SizedBox(height: 6),
               Text(
-                'Milk: ${bill.totalMilkLitres.toStringAsFixed(1)}L @ ₹${bill.appliedRate.toStringAsFixed(0)} = ${CurrencyFormatter.format(bill.currentMonthMilkCharges)}',
+                'दूध: ${bill.totalMilkLitres.toStringAsFixed(1)}L @ ₹${bill.appliedRate.toStringAsFixed(0)} = ${CurrencyFormatter.format(bill.currentMonthMilkCharges)}',
                 style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
               ),
               const Divider(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Prev Due: ${CurrencyFormatter.format(bill.previousBalance)} | Paid: ${CurrencyFormatter.format(bill.paidAmount)}',
-                        style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
-                      ),
-                    ],
+                  Text(
+                    'कालावधी: ${bill.yearMonth}',
+                    style: const TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500),
                   ),
                   Text(
                     CurrencyFormatter.format(bill.finalPayable),
@@ -266,4 +282,3 @@ class _MonthlyBillsScreenState extends State<MonthlyBillsScreen> {
     );
   }
 }
-
