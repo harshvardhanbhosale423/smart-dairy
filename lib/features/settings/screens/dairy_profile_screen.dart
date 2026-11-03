@@ -24,6 +24,8 @@ class _DairyProfileScreenState extends State<DairyProfileScreen> {
   late TextEditingController _cowCountController;
   late TextEditingController _rateController;
   late TextEditingController _addressController;
+  late TextEditingController _upiController;
+  late TextEditingController _holderNameController;
 
   bool _isLoading = false;
 
@@ -36,6 +38,8 @@ class _DairyProfileScreenState extends State<DairyProfileScreen> {
     _cowCountController = TextEditingController(text: '5');
     _rateController = TextEditingController(text: '60');
     _addressController = TextEditingController();
+    _upiController = TextEditingController();
+    _holderNameController = TextEditingController();
 
     _loadDairyDetails();
   }
@@ -52,6 +56,8 @@ class _DairyProfileScreenState extends State<DairyProfileScreen> {
         _cowCountController.text = (localData['cowCount'] ?? 5).toString();
         _rateController.text = (localData['defaultMilkRate'] ?? 60.0).toString();
         _addressController.text = localData['address'] ?? '';
+        _upiController.text = localData['ownerUpiId'] ?? '';
+        _holderNameController.text = localData['accountHolderName'] ?? localData['ownerName'] ?? '';
       });
       return;
     }
@@ -67,6 +73,8 @@ class _DairyProfileScreenState extends State<DairyProfileScreen> {
           _cowCountController.text = (data['cowCount'] ?? 5).toString();
           _rateController.text = (data['defaultMilkRate'] ?? 60.0).toString();
           _addressController.text = data['address'] ?? '';
+          _upiController.text = data['ownerUpiId'] ?? '';
+          _holderNameController.text = data['accountHolderName'] ?? data['ownerName'] ?? '';
         });
       }
     } catch (_) {}
@@ -79,6 +87,8 @@ class _DairyProfileScreenState extends State<DairyProfileScreen> {
     _cowCountController.dispose();
     _rateController.dispose();
     _addressController.dispose();
+    _upiController.dispose();
+    _holderNameController.dispose();
     super.dispose();
   }
 
@@ -97,6 +107,8 @@ class _DairyProfileScreenState extends State<DairyProfileScreen> {
       'cowCount': int.tryParse(_cowCountController.text.trim()) ?? 5,
       'defaultMilkRate': double.tryParse(_rateController.text.trim()) ?? 60.0,
       'address': _addressController.text.trim(),
+      'ownerUpiId': _upiController.text.trim(),
+      'accountHolderName': _holderNameController.text.trim(),
       'updatedAt': Timestamp.now(),
     };
 
@@ -180,6 +192,46 @@ class _DairyProfileScreenState extends State<DairyProfileScreen> {
                 ),
                 const SizedBox(height: 16),
 
+                // UPI Configuration Section
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.softLightGreen.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.primaryGreen.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.payment_rounded, color: AppColors.darkGreen, size: 20),
+                          SizedBox(width: 8),
+                          Text(
+                            'UPI पेमेंट सेटिंग्ज (पैसे जमा होण्यासाठी)',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.darkGreen),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      CustomTextField(
+                        controller: _upiController,
+                        label: 'मालकाचा UPI ID (उदा. 9822XXXXXX@ybl / patil@okaxis)',
+                        hint: 'yourname@bank',
+                        prefixIcon: Icons.account_balance_wallet_rounded,
+                      ),
+                      const SizedBox(height: 10),
+                      CustomTextField(
+                        controller: _holderNameController,
+                        label: 'बँक खात्यावरील नाव (Account Holder Name)',
+                        hint: 'उदा. हर्षवर्धन भोसले',
+                        prefixIcon: Icons.badge_rounded,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
                 CustomTextField(
                   controller: _addressController,
                   label: context.tr('address'),
@@ -203,4 +255,3 @@ class _DairyProfileScreenState extends State<DairyProfileScreen> {
     );
   }
 }
-

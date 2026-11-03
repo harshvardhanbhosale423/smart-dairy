@@ -14,22 +14,19 @@ import '../../milk_entry/repositories/milk_entry_repository.dart';
 import '../../milk_entry/models/milk_entry_model.dart';
 import '../../milk_entry/screens/daily_milk_entry_screen.dart';
 import '../../payments/screens/record_payment_screen.dart';
+import '../../../core/services/app_launcher.dart';
 
 class CustomerDetailScreen extends StatelessWidget {
   final CustomerModel customer;
 
   const CustomerDetailScreen({super.key, required this.customer});
 
-  void _call(String phone) async {
-    final uri = Uri.parse('tel:$phone');
-    if (await canLaunchUrl(uri)) await launchUrl(uri);
+  void _call(BuildContext context, String phone) async {
+    await AppLauncher.makePhoneCall(context, phone);
   }
 
-  void _whatsapp(String phone) async {
-    var cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
-    if (cleanPhone.length == 10) cleanPhone = '91$cleanPhone';
-    final uri = Uri.parse('https://wa.me/$cleanPhone');
-    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  void _whatsapp(BuildContext context, String phone) async {
+    await AppLauncher.openWhatsApp(context: context, phone: phone);
   }
 
   @override
@@ -171,11 +168,11 @@ class CustomerDetailScreen extends StatelessWidget {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.call, color: AppColors.darkGreen, size: 18),
-                          onPressed: () => _call(currentCustomer.phone),
+                          onPressed: () => _call(context, currentCustomer.phone),
                         ),
                         IconButton(
                           icon: const Icon(Icons.chat, color: AppColors.lightGreen, size: 18),
-                          onPressed: () => _whatsapp(currentCustomer.phone),
+                          onPressed: () => _whatsapp(context, currentCustomer.phone),
                         ),
                       ],
                     ),
@@ -260,11 +257,12 @@ class CustomerDetailScreen extends StatelessWidget {
                       onPressed: () {
                         final u = currentCustomer.username ?? currentCustomer.phone;
                         final p = currentCustomer.password ?? '123456';
-                        final msg = 'नमस्कार ${currentCustomer.name},\nस्मार्ट डेअरी ॲपमध्ये आपले स्वागत आहे! 🥛\n\nआपले लॉगिन तपशील:\nयुझरनेम: $u\nपासवर्ड: $p\n\nॲप डाऊनलोड करा:\nhttps://github.com/harshvardhanbhosale423/smart-dairy/releases/download/v1.0.0/app-release.apk';
-                        var cleanPhone = currentCustomer.phone.replaceAll(RegExp(r'\D'), '');
-                        if (cleanPhone.length == 10) cleanPhone = '91$cleanPhone';
-                        final uri = Uri.parse('https://wa.me/$cleanPhone?text=${Uri.encodeComponent(msg)}');
-                        launchUrl(uri, mode: LaunchMode.externalApplication);
+                        final msg = 'नमस्कार ${currentCustomer.name},\nस्मार्ट डेअरी ॲपमध्ये आपले स्वागत आहे! 🥛\n\nआपले लॉगिन तपशील:\nयुझरनेम: $u\nपासवर्ड: $p\n\nॲप डाऊनलोड करा:\nhttps://github.com/harshvardhanbhosale423/smart-dairy/releases/download/v1.0.4/app-release.apk';
+                        AppLauncher.openWhatsApp(
+                          context: context,
+                          phone: currentCustomer.phone,
+                          message: msg,
+                        );
                       },
                       icon: const Icon(Icons.share_rounded, color: AppColors.darkGreen, size: 18),
                       label: const Text(

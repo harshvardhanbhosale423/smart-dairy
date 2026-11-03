@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 import '../utils/currency_formatter.dart';
 import '../../features/billing/models/monthly_bill_model.dart';
 import '../../features/customers/models/customer_model.dart';
+import 'app_launcher.dart';
 
 class WhatsAppService {
   /// Generate formatted monthly bill message in Marathi
@@ -86,24 +87,15 @@ Thank you for choosing *${dairyName.trim()}*! 🙏
 ''';
   }
 
-  /// Share message directly via WhatsApp deep link
+  /// Share message directly via WhatsApp deep link with fallback
   static Future<bool> sendWhatsAppMessage({
     required String phone,
     required String message,
   }) async {
-    // Sanitize phone number (Indian phone format 91XXXXXXXXXX)
-    var cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
-    if (cleanPhone.length == 10) {
-      cleanPhone = '91$cleanPhone';
-    }
-
-    final encodedMessage = Uri.encodeComponent(message);
-    final url = Uri.parse('https://wa.me/$cleanPhone?text=$encodedMessage');
-
-    if (await canLaunchUrl(url)) {
-      return await launchUrl(url, mode: LaunchMode.externalApplication);
-    }
-    return false;
+    return await AppLauncher.openWhatsApp(
+      phone: phone,
+      message: message,
+    );
   }
 
   /// Share PDF Bill along with WhatsApp caption

@@ -9,6 +9,9 @@ import '../providers/milk_entry_provider.dart';
 import '../../customers/models/customer_model.dart';
 import '../../customers/providers/customer_provider.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../models/milk_entry_model.dart';
+import '../../../core/services/sms_service.dart';
+import '../../../core/services/local_database_service.dart';
 
 class QuickBatchEntryScreen extends StatefulWidget {
   const QuickBatchEntryScreen({super.key});
@@ -51,6 +54,10 @@ class _QuickBatchEntryScreenState extends State<QuickBatchEntryScreen> {
 
     setState(() => _isSavingAll = true);
 
+    final localDb = LocalDatabaseService();
+    final profile = localDb.get('dairy_profiles', user.uid);
+    final dairyName = (profile?['dairyName'] ?? user.name ?? 'Smart Dairy').toString();
+
     int count = 0;
     for (final c in customers) {
       final isZero = _zeroMilkFlags[c.id] ?? false;
@@ -66,6 +73,24 @@ class _QuickBatchEntryScreenState extends State<QuickBatchEntryScreen> {
         rate: c.milkRate,
         isZeroMilk: isZero,
       );
+
+      // Automatic SMS
+      final savedEntry = MilkEntryModel.create(
+        ownerId: user.uid,
+        customerId: c.id,
+        customerName: c.name,
+        date: entryProvider.selectedDate,
+        morningQty: morning,
+        eveningQty: evening,
+        rate: c.milkRate,
+        isZeroMilk: isZero,
+      );
+      SmsService.sendMilkEntrySms(
+        customer: c,
+        entry: savedEntry,
+        dairyName: dairyName,
+      );
+
       count++;
     }
 
@@ -74,7 +99,7 @@ class _QuickBatchEntryScreenState extends State<QuickBatchEntryScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('$count ग्राहकांची दूध नोंद यशस्वीरित्या जतन झाली / Saved $count entries!'),
+          content: Text('$count ग्राहकांची दूध नोंद जतन झाली व SMS पाठवला! 🥛📩'),
           backgroundColor: AppColors.success,
         ),
       );

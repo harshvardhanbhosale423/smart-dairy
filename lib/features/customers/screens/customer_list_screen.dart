@@ -6,6 +6,7 @@ import '../../../core/localization/app_localizations.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/widgets/confirmation_dialog.dart';
 import '../../../core/widgets/empty_state_widget.dart';
+import '../../../core/services/app_launcher.dart';
 import '../models/customer_model.dart';
 import '../providers/customer_provider.dart';
 import '../../auth/models/user_model.dart';
@@ -41,19 +42,11 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   }
 
   void _callCustomer(String phone) async {
-    final uri = Uri.parse('tel:$phone');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    }
+    await AppLauncher.makePhoneCall(context, phone);
   }
 
   void _whatsappCustomer(String phone) async {
-    var cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
-    if (cleanPhone.length == 10) cleanPhone = '91$cleanPhone';
-    final uri = Uri.parse('https://wa.me/$cleanPhone');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+    await AppLauncher.openWhatsApp(context: context, phone: phone);
   }
 
   void _showApproveDialog(UserModel user) {

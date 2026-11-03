@@ -64,9 +64,9 @@ jobs:
         if: success() && github.ref == 'refs/heads/main'
         continue-on-error: true
         with:
-          tag_name: v1.0.3
-          name: "Smart Dairy v1.0.3 - Permanent Fix Offline-First Database APK"
-          body: "Smart Dairy Android APK with 100% Offline-First Persistent Database Engine, eliminating all Cloud Permission Denied issues, plus 5-Attempt Rate Limiting and SHA-256 Security"
+          tag_name: v1.0.4
+          name: "Smart Dairy v1.0.4 - WhatsApp, Direct Calling, Auto SMS & 100% Owner UPI Payments"
+          body: "Smart Dairy Android APK v1.0.4 with WhatsApp launch fix, direct phone dialer calling, automatic customer SMS from owner SIM daily recharge on milk entry, and 100% guaranteed payment routing directly to the dairy owner's verified UPI ID"
           files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

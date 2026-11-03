@@ -17,6 +17,8 @@ import '../../milk_entry/models/milk_entry_model.dart';
 import '../../settings/models/dairy_settings_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../payments/screens/record_payment_screen.dart';
+import '../../../core/services/local_database_service.dart';
+import '../../../core/services/app_launcher.dart';
 
 class BillDetailScreen extends StatefulWidget {
   final MonthlyBillModel bill;
@@ -66,8 +68,11 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
     );
 
     final user = context.read<AuthProvider>().currentUser;
-    final dairyName = user?.name ?? 'Smart Dairy';
-    const ownerUpi = 'owner@upi'; // or from settings
+    final localDb = LocalDatabaseService();
+    final profile = localDb.get('dairy_profiles', widget.bill.ownerId) ??
+        (user != null ? localDb.get('dairy_profiles', user.uid) : null);
+    final dairyName = (profile?['dairyName'] ?? user?.name ?? 'Smart Dairy').toString();
+    final ownerUpi = (profile?['ownerUpiId'] ?? '').toString();
 
     final message = isMarathi
         ? WhatsAppService.formatMarathiBillMessage(
@@ -83,16 +88,11 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
             ownerUpiId: ownerUpi,
           );
 
-    final sent = await WhatsAppService.sendWhatsAppMessage(
+    await AppLauncher.openWhatsApp(
+      context: context,
       phone: widget.bill.customerPhone,
       message: message,
     );
-
-    if (!sent && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open WhatsApp'), backgroundColor: AppColors.error),
-      );
-    }
   }
 
   void _onDownloadPdf() async {
@@ -111,14 +111,17 @@ class _BillDetailScreenState extends State<BillDetailScreen> {
 
     final user = context.read<AuthProvider>().currentUser;
     final isMarathi = context.read<LocaleProvider>().isMarathi;
+    final localDb = LocalDatabaseService();
+    final profile = localDb.get('dairy_profiles', widget.bill.ownerId) ??
+        (user != null ? localDb.get('dairy_profiles', user.uid) : null);
 
     final dairy = DairySettingsModel(
       id: widget.bill.ownerId,
       ownerId: widget.bill.ownerId,
-      dairyName: user?.name ?? 'Smart Dairy Farm',
-      ownerName: user?.name ?? 'Dairy Owner',
-      ownerPhone: user?.phone ?? '',
-      ownerUpiId: 'owner@upi',
+      dairyName: (profile?['dairyName'] ?? user?.name ?? 'Smart Dairy Farm').toString(),
+      ownerName: (profile?['ownerName'] ?? user?.name ?? 'Dairy Owner').toString(),
+      ownerPhone: (profile?['ownerPhone'] ?? user?.phone ?? '').toString(),
+      ownerUpiId: (profile?['ownerUpiId'] ?? '').toString(),
       updatedAt: DateTime.now(),
     );
 

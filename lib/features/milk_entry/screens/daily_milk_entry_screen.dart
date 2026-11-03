@@ -15,6 +15,8 @@ import '../../customers/models/customer_model.dart';
 import '../../customers/providers/customer_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'quick_batch_entry_screen.dart';
+import '../../../core/services/sms_service.dart';
+import '../../../core/services/local_database_service.dart';
 
 class DailyMilkEntryScreen extends StatefulWidget {
   final CustomerModel? preSelectedCustomer;
@@ -158,10 +160,35 @@ class _DailyMilkEntryScreenState extends State<DailyMilkEntryScreen> {
     );
 
     if (success && mounted) {
+      final savedEntry = MilkEntryModel.create(
+        ownerId: user.uid,
+        customerId: _selectedCustomer!.id,
+        customerName: _selectedCustomer!.name,
+        date: entryProvider.selectedDate,
+        morningQty: morning,
+        eveningQty: evening,
+        rate: rate,
+        isZeroMilk: _isZeroMilk,
+        notes: _notesController.text.trim(),
+      );
+
+      final localDb = LocalDatabaseService();
+      final dairyProfile = localDb.get('dairy_profiles', user.uid);
+      final dairyName = (dairyProfile?['dairyName'] ?? user.name ?? 'Smart Dairy').toString();
+
+      // Automatic SMS via owner's SIM daily recharge
+      SmsService.sendMilkEntrySms(
+        customer: _selectedCustomer!,
+        entry: savedEntry,
+        dairyName: dairyName,
+        context: context,
+      );
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('दूध नोंद यशस्वीरित्या जतन झाली / Milk Entry Saved!'),
+          content: Text('दूध नोंद जतन झाली व ग्राहकाला SMS पाठवला! 🥛📩'),
           backgroundColor: AppColors.success,
+          duration: Duration(seconds: 3),
         ),
       );
       _notesController.clear();

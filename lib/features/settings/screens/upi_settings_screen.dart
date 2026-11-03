@@ -222,6 +222,12 @@ class _UpiSettingsScreenState extends State<UpiSettingsScreen> {
                             holderName,
                             style: const TextStyle(fontSize: 11, color: Colors.black54),
                           ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: () => UpiService.launchUpiIntent(upiUri: testUri),
+                            icon: const Icon(Icons.touch_app_rounded, size: 16),
+                            label: const Text('UPI ॲपमध्ये स्वतःचे नाव तपासा (Test)'),
+                          ),
                         ],
                       ),
                     ),

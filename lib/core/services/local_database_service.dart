@@ -44,7 +44,13 @@ class LocalDatabaseService {
             if (colVal is Map<String, dynamic>) {
               colVal.forEach((docKey, docVal) {
                 if (docVal is Map<String, dynamic>) {
-                  _data[colKey]![docKey] = _deserializeMap(docVal);
+                  final deserialized = _deserializeMap(docVal);
+                  if (colKey == 'dairy_profiles' &&
+                      (deserialized['ownerUpiId'] == 'harshvardhan@upi' ||
+                          deserialized['ownerUpiId'] == 'owner@upi')) {
+                    deserialized['ownerUpiId'] = '';
+                  }
+                  _data[colKey]![docKey] = deserialized;
                 }
               });
             }
@@ -77,7 +83,8 @@ class LocalDatabaseService {
         'dairyName': 'भोसले दूध डेअरी (Smart Dairy)',
         'ownerName': 'हर्षवर्धन भोसले',
         'ownerPhone': '9822000000',
-        'ownerUpiId': 'harshvardhan@upi',
+        'ownerUpiId': '',
+        'accountHolderName': 'हर्षवर्धन भोसले',
         'cowsOwned': 10,
         'defaultMilkRate': 60.0,
         'address': 'पुणे, महाराष्ट्र',

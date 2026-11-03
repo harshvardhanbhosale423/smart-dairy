@@ -15,6 +15,7 @@ import '../../customers/repositories/customer_repository.dart';
 import '../../milk_entry/repositories/milk_entry_repository.dart';
 import '../../settings/models/dairy_settings_model.dart';
 import '../../payments/screens/upi_payment_screen.dart';
+import '../../../core/services/local_database_service.dart';
 
 class CustomerBillsScreen extends StatelessWidget {
   const CustomerBillsScreen({super.key});
@@ -154,6 +155,19 @@ class CustomerBillsScreen extends StatelessWidget {
     final customer = await CustomerRepository().getCustomer(bill.customerId);
     if (customer == null || !context.mounted) return;
 
+    final localDb = LocalDatabaseService();
+    var dairyMap = localDb.get('dairy_profiles', bill.ownerId);
+    if (dairyMap == null && customer.ownerId.isNotEmpty) {
+      dairyMap = localDb.get('dairy_profiles', customer.ownerId);
+    }
+    if (dairyMap == null) {
+      final all = localDb.getAll('dairy_profiles');
+      if (all.isNotEmpty) dairyMap = all.first;
+    }
+
+    final realOwnerUpi = (dairyMap?['ownerUpiId'] ?? '').toString();
+    final realDairyName = (dairyMap?['dairyName'] ?? 'Smart Dairy').toString();
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -161,8 +175,8 @@ class CustomerBillsScreen extends StatelessWidget {
           customer: customer,
           bill: bill,
           payableAmount: bill.finalPayable,
-          ownerUpiId: 'owner@upi',
-          dairyName: 'Smart Dairy',
+          ownerUpiId: realOwnerUpi,
+          dairyName: realDairyName,
         ),
       ),
     );
@@ -178,13 +192,23 @@ class CustomerBillsScreen extends StatelessWidget {
       month: bill.month,
     );
 
+    final localDb = LocalDatabaseService();
+    var dairyMap = localDb.get('dairy_profiles', bill.ownerId);
+    if (dairyMap == null && customer.ownerId.isNotEmpty) {
+      dairyMap = localDb.get('dairy_profiles', customer.ownerId);
+    }
+    if (dairyMap == null) {
+      final all = localDb.getAll('dairy_profiles');
+      if (all.isNotEmpty) dairyMap = all.first;
+    }
+
     final dairy = DairySettingsModel(
       id: bill.ownerId,
       ownerId: bill.ownerId,
-      dairyName: 'Smart Dairy',
-      ownerName: 'Dairy Owner',
-      ownerPhone: '',
-      ownerUpiId: 'owner@upi',
+      dairyName: (dairyMap?['dairyName'] ?? 'Smart Dairy').toString(),
+      ownerName: (dairyMap?['ownerName'] ?? 'Dairy Owner').toString(),
+      ownerPhone: (dairyMap?['ownerPhone'] ?? '').toString(),
+      ownerUpiId: (dairyMap?['ownerUpiId'] ?? '').toString(),
       updatedAt: DateTime.now(),
     );
 

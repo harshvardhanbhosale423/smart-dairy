@@ -14,6 +14,7 @@ import '../../customers/models/customer_model.dart';
 import '../../billing/models/monthly_bill_model.dart';
 import '../../milk_entry/models/milk_entry_model.dart';
 import '../../payments/screens/upi_payment_screen.dart';
+import '../../../core/services/app_launcher.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   final Function(int)? onNavigateTab;
@@ -52,11 +53,18 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     final custMap = localDb.get('customers', user.customerId!);
     if (custMap != null) {
       _customer = CustomerModel.fromMap(custMap, user.customerId!);
-      final dairyMap = localDb.get('dairy_profiles', _customer!.ownerId);
+      var dairyMap = localDb.get('dairy_profiles', _customer!.ownerId);
+      if (dairyMap == null && user.dairyId != null && user.dairyId!.isNotEmpty) {
+        dairyMap = localDb.get('dairy_profiles', user.dairyId!);
+      }
+      if (dairyMap == null) {
+        final allProfiles = localDb.getAll('dairy_profiles');
+        if (allProfiles.isNotEmpty) dairyMap = allProfiles.first;
+      }
       if (dairyMap != null) {
-        _ownerUpiId = dairyMap['ownerUpiId'] ?? '';
-        _dairyName = dairyMap['dairyName'] ?? 'Smart Dairy';
-        _ownerPhone = dairyMap['ownerPhone'] ?? '';
+        _ownerUpiId = (dairyMap['ownerUpiId'] ?? '').toString();
+        _dairyName = (dairyMap['dairyName'] ?? 'Smart Dairy').toString();
+        _ownerPhone = (dairyMap['ownerPhone'] ?? '').toString();
       }
 
       final now = DateTime.now();
@@ -123,17 +131,27 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   }
 
   void _callOwner() async {
-    if (_ownerPhone.isEmpty) return;
-    final uri = Uri.parse('tel:$_ownerPhone');
-    if (await canLaunchUrl(uri)) await launchUrl(uri);
+    if (_ownerPhone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('डेअरी मालकाचा फोन नंबर उपलब्ध नाही'), backgroundColor: AppColors.warning),
+      );
+      return;
+    }
+    await AppLauncher.makePhoneCall(context, _ownerPhone);
   }
 
   void _whatsappOwner() async {
-    if (_ownerPhone.isEmpty) return;
-    var cleanPhone = _ownerPhone.replaceAll(RegExp(r'\D'), '');
-    if (cleanPhone.length == 10) cleanPhone = '91$cleanPhone';
-    final uri = Uri.parse('https://wa.me/$cleanPhone');
-    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (_ownerPhone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('डेअरी मालकाचा व्हॉट्सअ‍ॅप नंबर उपलब्ध नाही'), backgroundColor: AppColors.warning),
+      );
+      return;
+    }
+    await AppLauncher.openWhatsApp(
+      context: context,
+      phone: _ownerPhone,
+      message: 'नमस्कार, मी ${_customer?.name ?? 'ग्राहक'} बोलत आहे (Smart Dairy).',
+    );
   }
 
   @override
