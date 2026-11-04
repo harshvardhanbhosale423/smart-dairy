@@ -134,8 +134,14 @@ class CustomerProvider extends ChangeNotifier {
     await _repository.updateCustomerStatus(customer.id, nextStatus);
   }
 
-  Future<void> deactivateCustomer(CustomerModel customer) async {
+  Future<void> deleteCustomer(CustomerModel customer) async {
     await _repository.deleteCustomer(customer.id, customer.ownerId);
+    _allCustomers.removeWhere((c) => c.id == customer.id);
+    notifyListeners();
+  }
+
+  Future<void> deactivateCustomer(CustomerModel customer) async {
+    await deleteCustomer(customer);
   }
 
   @override
