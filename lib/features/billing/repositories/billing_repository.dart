@@ -263,12 +263,46 @@ class BillingRepository {
     return bill;
   }
 
+  /// Generate bills for all customers in given month
+  Future<List<MonthlyBillModel>> generateBillsForAllCustomers({
+    required String ownerId,
+    required List<CustomerModel> customers,
+    required int year,
+    required int month,
+  }) async {
+    final List<MonthlyBillModel> generated = [];
+    for (final customer in customers) {
+      try {
+        final bill = await generateBillForCustomer(customer: customer, year: year, month: month);
+        generated.add(bill);
+      } catch (_) {}
+    }
+    return generated;
+  }
+
   /// Delete a bill
   Future<void> deleteBill(String billId) async {
     await _localDb.delete('monthly_bills', billId);
     try {
       await _firestore.collection('monthly_bills').doc(billId).delete();
     } catch (_) {}
+  }
+
+  /// Stream of all monthly bills for an owner for specific month
+  Stream<List<MonthlyBillModel>> getOwnerBillsForMonthStream({
+    required String ownerId,
+    required String yearMonth,
+  }) {
+    return _localDb.stream('monthly_bills', where: (b) {
+      if (b['ownerId'] != ownerId) return false;
+      final ym = (b['yearMonth'] ?? '').toString();
+      // Match exact month or show custom multi-month bills
+      return ym == yearMonth || ym.contains(yearMonth);
+    }).map((list) {
+      final bills = list.map((doc) => MonthlyBillModel.fromMap(doc, (doc['id'] ?? '').toString())).toList();
+      bills.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return bills;
+    });
   }
 
   /// Stream of all monthly bills for an owner in a specific month or all months
@@ -279,7 +313,8 @@ class BillingRepository {
     return _localDb.stream('monthly_bills', where: (b) {
       if (b['ownerId'] != ownerId) return false;
       if (yearMonthFilter != null && yearMonthFilter.isNotEmpty) {
-        return b['yearMonth'] == yearMonthFilter;
+        final ym = (b['yearMonth'] ?? '').toString();
+        return ym == yearMonthFilter || ym.contains(yearMonthFilter);
       }
       return true;
     }).map((list) {
